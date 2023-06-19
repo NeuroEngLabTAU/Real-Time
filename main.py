@@ -1,13 +1,22 @@
+import matplotlib
+matplotlib.use('Qt5Agg')
+import matplotlib.pyplot as plt
+from PyQt5.QtCore import QThread, Qt, pyqtSignal, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow
+import threading
+
 from XtrRT.data import Data #data collection
 from XtrRT.viz import Viz  #real time raw data plotting
-from XtrRT.ica import Viz_ICA   # interactive ica in real time
+# from XtrRT.ica import Viz_ICA   # interactive ica in real time
 from XtrRT.ica_streaming import Viz_ICA_Streaming    # Streaming ICA
+from XtrRT.electrodes_raw_streaming import Electrodes_Raw_Streaming  # stream raw data with electrodes location
 
 #for image load, electrode selection, and heatmaps
 import cv2
 import matplotlib.image as mpimg
 import numpy as np
 from matplotlib.path import Path
+
 
 #########################
 ###### Load image #######
@@ -93,8 +102,9 @@ if __name__ == '__main__':
 
     # define the desired visualisation
     viz_raw = False  # raw signal streaming
-    viz_ica = False
-    viz_ica_streaming = True
+    # viz_ica = False
+    viz_ica_streaming = True  # streaming ICA signals with heatmaps
+    Electrodes_raw = True  # raw signal electrodes
 
     host_name = "127.0.0.1"
     port = 20001
@@ -115,7 +125,7 @@ if __name__ == '__main__':
     if len(x_coor)==0:  # if manually inserted coordinates, there is not need to get the electrode locations (otherwise select electrodes from image)
         get_location()
 
-    #create dummy heatmap for funcAnimator setup
+    # create dummy heatmap for funcAnimator setup
     vertices = list(zip(x_coor, y_coor))
     num_rows, num_cols = height, width
     d_interpolate = fill_polygon(vertices, num_rows, num_cols)
@@ -131,19 +141,30 @@ if __name__ == '__main__':
                   update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15, filter_data=True)
 
 
-    if viz_ica:
-        viz = Viz_ICA(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
-                  x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
+    # if viz_ica:
+    #     viz = Viz_ICA(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+    #               update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
+    #               x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
     if viz_ica_streaming:
         viz = Viz_ICA_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
                   update_interval_ms=10, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True)
 
-    if viz_raw or viz_ica or viz_ica_streaming:
-        viz.start()
+    if viz_raw or viz_ica_streaming:
+        viz_fig = viz.start()
 
+
+
+    if Electrodes_raw:
+        elctrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False,
+                   find_emg=False, filters=filters, update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
+                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
+
+        electrodes_fig = elctrodes_streaming.start()
+
+
+    plt.show()
 
     data.add_annotation("Stop recording")
     data.stop()

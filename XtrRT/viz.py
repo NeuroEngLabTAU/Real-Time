@@ -349,6 +349,7 @@ class Viz:
         for n in range(n_exg_channels + n_imu_channels):
             # filt = Filterer.filter_data(y[:, n], self.filters, self.data.fs_exg, verbose=False)
             # self.lines[n].set_data(x, filt)
+            print(max(viz_y[:, n]))
             self.lines[n].set_data(x, viz_y[:, n])
         self.axes[-1, -1].set_xlim((x[0], x[-1]))
 
@@ -398,7 +399,8 @@ class Viz:
         import matplotlib.dates as mdates
         myFmt = mdates.DateFormatter('%H:%M:%S')
         [ax.xaxis.set_major_formatter(myFmt) for ax in self.axes[-1, :]]
-        [ax.tick_params(axis="x", direction="in", pad=-15, size=9) for ax in self.axes[-1, :]]
+        [ax.tick_params(
+            axis="x", direction="in", pad=-15, size=9) for ax in self.axes[-1, :]]
         [ax.axes.xaxis.set_ticklabels([]) for ax in self.axes[-1, :]]
 
         # if self._backend == 'module://mplopengl.backend_qtgl':

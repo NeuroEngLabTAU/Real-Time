@@ -17,7 +17,7 @@ from matplotlib.widgets import Button, TextBox #for button in funcanimator
 warnings.filterwarnings("ignore", category=sklearn.exceptions.ConvergenceWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-
+import time
 
 #for heatmap
 from numpy.linalg import inv
@@ -277,7 +277,7 @@ class Viz_ICA_Streaming:
 
         return combined_list_sorted, key_mapping_sorted
 
-    #Smear/cluster class, contains the characteristics of the cluster/smear
+    # Smear/cluster class, contains the characteristics of the cluster/smear
     class Smear:
         def __init__(self, number):
             self.number = number
@@ -528,14 +528,16 @@ class Viz_ICA_Streaming:
         else:
             ica_y=y
 
+        # ica_start_time = time.time()
         K, W, Y = picard(ica_y[:, :n_exg_channels].T, n_components=16, ortho=True, max_iter=200)  # ICA algorithm
+        # print('ICA took {} seconds'.format(time.time() - ica_start_time))  # to check the time it takes to run ICA
 
         inverse = np.absolute(inv(np.matmul(W, K)))
         grid_y, grid_x = np.mgrid[1:self.height + 1, 1:self.width + 1]
         points = np.column_stack((self.x_coor, self.y_coor))
 
-        #find the order for the atlas
-        array_indices, f_interpolate=Viz_ICA_Streaming.atlas(self, W, K, 16, self.wanted_order)
+        # find the order for the atlas
+        array_indices, f_interpolate = Viz_ICA_Streaming.atlas(self, W, K, 16, self.wanted_order)
 
 
         self.f_interpolate=f_interpolate
@@ -554,13 +556,13 @@ class Viz_ICA_Streaming:
             if (j % 2 != 0):
                 self.lines[j].set_array(f_interpolate[order[source]].ravel())
             else:
-                new_model=sig.resample(model[order[source]], n_pts, axis=0)
+                new_model = sig.resample(model[order[source]], n_pts, axis=0)
                 #self.lines[i].set_data(x,model[source])
                 self.lines[j].set_data(x, new_model)
 
 
-        #duration = how much time passed since starting - > this will be the text on the right
-        #the time one the left will be calculated as the time that passed - the window time
+        # duration = how much time passed since starting - > this will be the text on the right
+        # the time one the left will be calculated as the time that passed - the window time
         duration = datetime.now() - self.init_time
         time_right = Viz_ICA_Streaming._format_time_ICA(duration)
         time_left = max(timedelta(seconds=0), duration - timedelta(seconds=self.window_secs))
@@ -590,27 +592,29 @@ class Viz_ICA_Streaming:
 
 
     # Define the start/stop function for the button
-    # def start_stop_callback(self, event):
-    #     if self.start_label == 'Start':
-    #         self.start_label = 'Stop'
-    #         self.start_time = datetime.now()
-    #         self.button_start.label.set_text(self.start_label)
-    #         self.timer_text.set_text('Elapsed time: 0.00 seconds')
-    #         self.timer.start()  # Start the timer
-    #         self.timer_running = True
-    #     else:
-    #         self.start_label = 'Start'
-    #         elapsed_time = datetime.now() - self.start_time
-    #         print('Elapsed time:', elapsed_time.total_seconds())
-    #         self.button_start.label.set_text(self.start_label)
-    #         self.timer.stop()  # Stop the timer
-    #         self.timer_running = False
-    #
-    # def update_timer(self):
-    #     if self.timer_running:
-    #         elapsed_time = datetime.now() - self.start_time
-    #         self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
-    #         self.figure.canvas.draw_idle()
+    def start_stop_callback(self, event):
+        if self.start_label == 'Start':
+            self.start_label = 'Stop'
+            self.start_time = datetime.now()
+            self.button_start.label.set_text(self.start_label)
+            self.timer_text.set_text('Elapsed time: 0.00 seconds')
+            self.timer.start()  # Start the timer
+            self.timer_running = True
+        else:
+            self.start_label = 'Start'
+            elapsed_time = datetime.now() - self.start_time
+            print('Elapsed time:', elapsed_time.total_seconds())
+            self.ica_integration_time = elapsed_time.total_seconds()
+            print('ICA integration time:', self.ica_integration_time)
+            self.button_start.label.set_text(self.start_label)
+            self.timer.stop()  # Stop the timer
+            self.timer_running = False
+
+    def update_timer(self):
+        if self.timer_running:
+            elapsed_time = datetime.now() - self.start_time
+            self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
+            self.figure.canvas.draw_idle()
 
     def start_animation(self,event):
         self.animation.event_source.start()
@@ -632,12 +636,12 @@ class Viz_ICA_Streaming:
         print(self.ica_integration_time)
 
     def start(self):
-        #do  blit = False to change the xaxis length....
+        # do  blit = False to change the xaxis length....
         self.animation = FuncAnimation(self.figure, self.update,
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
         # create a timer object
-        self.timer = self.figure.canvas.new_timer(interval=100)
+        self.timer = self.figure.canvas.new_timer(interval=200)
         # add callback to timer
         self.timer.add_callback(self.update_timer)
 
@@ -645,12 +649,12 @@ class Viz_ICA_Streaming:
         self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
         self.timer_ax.axis('off')  # Turn off the axes
         # create text object which will be updated every 0.1 second
-        self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.axes[0].transAxes, ha="center")
+        self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
 
-        # # Create start and stop buttons
-        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        # self.button_start = Button(ax_start, self.start_label)
-        # self.button_start.on_clicked(self.start_stop_callback)
+        # Create start and stop buttons
+        ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
+        self.button_start = Button(ax_start, self.start_label)
+        self.button_start.on_clicked(self.start_stop_callback)
 
         # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
         # button_stop = Button(ax_stop, 'Stop')
@@ -660,5 +664,5 @@ class Viz_ICA_Streaming:
         integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
         integ_time.on_submit(self.submit_integ_time)
 
-
-        plt.show()
+        self.animation._start()
+        # plt.show()
