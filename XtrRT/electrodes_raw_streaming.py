@@ -367,7 +367,7 @@ class Electrodes_Raw_Streaming:
         for j in range(len(self.axes)):
             source = int(j / 2)
             if (j % 2 == 0):
-                self.lines[j].set_data(x, viz_y[:, source])
+                self.lines[j].set_data(x, viz_y[:, self.wanted_order[source]])
         # self.axes[-1, -1].set_xlim((x[0], x[-1]))
 
         # Time of last update (must be inside axes for blit to work)
@@ -456,5 +456,4 @@ class Electrodes_Raw_Streaming:
         # button_stop = Button(ax_stop, 'Stop')
         # button_stop.on_clicked(self.stop_animation)
 
-        self.animation._start()
         # plt.show()

@@ -17,6 +17,8 @@ import matplotlib.image as mpimg
 import numpy as np
 from matplotlib.path import Path
 
+import os
+
 
 #########################
 ###### Load image #######
@@ -113,15 +115,26 @@ if __name__ == '__main__':
     data.start()
 
     #upload your image - insert image path
-    image_path = r"C:\Users\YH006_new\Simulation\Paul_45.jpg"
+
+    # image_path = r"C:\Users\YH006_new\Simulation\Paul_45.jpg"
+
+    # Get the path of the current script
+    script_path = os.path.abspath(__file__)
+    # Get the directory containing the script
+    script_directory = os.path.dirname(script_path)
+    # Construct the image path relative to the script directory
+    image_path = os.path.join(script_directory, "face-muscles-anatomy.jpg")
+
     image, height, width = image_load(image_path)
 
 
     #to select the electrodes locations on the image leave empty, otherwise load
-    #x_coor=[]
-    #y_coor=[]
-    x_coor = np.load(r'C:\Users\YH006_new\Simulation\x_coor_45.npy')
-    y_coor = np.load(r'C:\Users\YH006_new\Simulation\y_coor_45.npy')
+    # x_coor=[]
+    # y_coor=[]
+    x_coor = [557, 398, 336, 444, 466, 342, 389, 490, 601, 450, 335, 328, 422, 545, 551, 689]
+    y_coor = [836, 786, 690, 721, 657, 634, 586, 599, 567, 541, 537, 477, 387, 381, 290, 289]
+    # x_coor = np.load(r'C:\Users\YH006_new\Simulation\x_coor_45.npy')
+    # y_coor = np.load(r'C:\Users\YH006_new\Simulation\y_coor_45.npy')
     if len(x_coor)==0:  # if manually inserted coordinates, there is not need to get the electrode locations (otherwise select electrodes from image)
         get_location()
 

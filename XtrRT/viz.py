@@ -454,4 +454,4 @@ class Viz:
         button_stop.on_clicked(self.stop_animation)
 
 
-        plt.show()
+        # plt.show()

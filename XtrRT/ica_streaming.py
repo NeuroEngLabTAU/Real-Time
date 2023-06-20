@@ -44,11 +44,11 @@ class Viz_ICA_Streaming:
                  find_emg: bool = False,
                  filters: dict = None,
                  x_coor: np.ndarray[np.float64] = None,
-                 y_coor: np.ndarray[np.float64] =None,
+                 y_coor: np.ndarray[np.float64] = None,
                  width: int = None,
-                 height: int=None,
+                 height: int = None,
                  image: np.ndarray[np.uint8] = None,
-                 d_interpolate: np.ndarray[np.float64] =None,
+                 d_interpolate: np.ndarray[np.float64] = None,
                  filter_data: bool=False):
 
         assert plot_exg or plot_imu
@@ -664,5 +664,4 @@ class Viz_ICA_Streaming:
         integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
         integ_time.on_submit(self.submit_integ_time)
 
-        self.animation._start()
         # plt.show()
