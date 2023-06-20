@@ -19,16 +19,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 import time
 
-#for heatmap
-from numpy.linalg import inv
-from scipy.interpolate import griddata
-import cv2
-import matplotlib.image as mpimg
 
-#for ICA
-from picard import picard #*need to cite*,  install "python-picard"
+from matplotlib.patches import Circle  # for marking the electrodes on the image
 
-class Viz_ICA_Streaming:
+
+class Electrodes_Raw_Streaming:
 
     def __init__(self,
                  data: Data,
@@ -44,11 +39,11 @@ class Viz_ICA_Streaming:
                  find_emg: bool = False,
                  filters: dict = None,
                  x_coor: np.ndarray[np.float64] = None,
-                 y_coor: np.ndarray[np.float64] = None,
+                 y_coor: np.ndarray[np.float64] =None,
                  width: int = None,
-                 height: int = None,
+                 height: int=None,
                  image: np.ndarray[np.uint8] = None,
-                 d_interpolate: np.ndarray[np.float64] = None,
+                 # d_interpolate: np.ndarray[np.float64] =None,
                  filter_data: bool=False):
 
         assert plot_exg or plot_imu
@@ -65,7 +60,7 @@ class Viz_ICA_Streaming:
         self.xdata = None
         self.ydata = None
         self.lines = []
-        self.pause_time= None
+        self.pause_time = None
         self.unpause_time = None
         self.bg = None
         self.last_exg_sample = 0
@@ -73,7 +68,7 @@ class Viz_ICA_Streaming:
         self.init_time = datetime.now()
         self.update_interval_ms = update_interval_ms
         self.max_points = max_points
-        self.new_max_points=max_points
+        self.new_max_points = max_points
         self._backend = None
 
         self.pause=False
@@ -81,7 +76,6 @@ class Viz_ICA_Streaming:
         self.fs=None #added sampling rate as attribute  (fs)
 
         # for the buttons on the figure:
-        self.ica_integration_time = 10  # default value of 10 seconds for ICA integration time
         self.button_start = None
         self.start_label = 'Start'
         self.start_time = None
@@ -91,7 +85,7 @@ class Viz_ICA_Streaming:
         self.timer_running = False
 
 
-        #define the arrangement order of  the atlas
+        # define the arrangement order of  the atlas
         self.wanted_order = np.array([12, 13, 14, 15,
                                       11, 10, 9, 8,
                                       4, 5, 6, 7,
@@ -107,10 +101,10 @@ class Viz_ICA_Streaming:
         self.points = None
         self.image = image
 
-        self.d_interpolate=d_interpolate #dummy heatmap for funcanimator initilization
+        # self.d_interpolate = d_interpolate  # dummy heatmap for funcanimator initilization
 
-        #added the option to filter the data
-        self.filter_data=filter_data
+        # added the option to filter the data
+        self.filter_data = filter_data
 
 
         # Confirm initial data retrieval before continuing (or raise Error if timeout)
@@ -159,10 +153,10 @@ class Viz_ICA_Streaming:
         #screensize_inches = [px*npx for npx in screensize]
 
         # set up the grid for the heatmaps with sources
-        row_num, col_num = 4, 12 #define the row and col
+        row_num, col_num = 4, 12  # define the row and col
         ratio = round(self.height / self.width, 1)
 
-        #define layout for the plot
+        # define layout for the plot
         fig, axes = plt.subplots()
         spec = fig.add_gridspec(row_num, col_num)
 
@@ -183,12 +177,15 @@ class Viz_ICA_Streaming:
             source = int(j / 2)
             if (j % 2 != 0):
                 axs[j].imshow(self.image)
-                im=axs[j].pcolormesh(self.d_interpolate, cmap='jet', alpha=0.5)
-                self.lines.append(im)
+                circle = Circle((self.x_coor[self.wanted_order[source]], self.y_coor[self.wanted_order[source]]), 15,
+                                edgecolor='red', linewidth=2, fill=False)
+                axs[j].add_patch(circle)
+                # im = axs[j].pcolormesh(self.d_interpolate, cmap='jet', alpha=0.5)
+                self.lines.append(axs[j])
                 axs[j].set_aspect('auto')
                 axs[j].axis('off')
             else:
-                line, =axs[j].plot(self.xdata, self.ydata[:, source], color='tab:blue', lw=0.5)
+                line, = axs[j].plot(self.xdata, self.ydata[:, source], color='tab:blue', lw=0.5)
                 axs[j].margins(0)
                 axs[j].set_ylim(self.ylim_exg)
                 self.lines.append(line)
@@ -201,8 +198,6 @@ class Viz_ICA_Streaming:
                 axs[j].tick_params(axis='y', labelsize=10, direction='in', length=4, width=1, bottom=False, labelbottom=False)
             else:
                 axs[j].tick_params(axis='y', left=False, labelleft=False, bottom=False, labelbottom=False)
-
-
 
 
         self.axes = axs
@@ -238,149 +233,6 @@ class Viz_ICA_Streaming:
 
         return data, n_samples_cropped
 
-
-    #functions used for atlas
-    #find the array + size of array cooresponding to the red/orange (depending on the threshold) of the heatmsp
-    @staticmethod
-    def _red_size(arr, thresh):
-        myrange = np.nanmax(arr) - np.nanmin(arr)
-        norm_arr = (arr - np.nanmin(arr)) / myrange
-        # threshold for red/orange 0.75-0.1
-        condition = (norm_arr.ravel()) > thresh
-        flat_indices = np.where(condition)[0]
-
-        return flat_indices, flat_indices.shape[0]
-
-    #normalized an array from 0(min) to 1(max)
-    @staticmethod
-    def _norm(arr):
-        myrange = np.nanmax(arr) - np.nanmin(arr)
-        norm_arr = (arr - np.nanmin(arr)) / myrange
-        return norm_arr
-
-
-    #given a ditionary containing the smear/cluster charactersitics
-    # the function orders the area of the smear, and well as providing the keys corresponding to that order
-    @staticmethod
-    def _combine_and_sort(dictionary):
-        combined_list = []
-        key_mapping = []
-
-        for key in dictionary.keys():
-            size = dictionary[key].size
-            combined_list.append(size)
-            key_mapping.append(key)
-
-        sorted_indices = sorted(range(len(combined_list)), key=lambda k: combined_list[k], reverse=False)
-        combined_list_sorted = [combined_list[i] for i in sorted_indices]
-        key_mapping_sorted = [key_mapping[i] for i in sorted_indices]
-
-        return combined_list_sorted, key_mapping_sorted
-
-    # Smear/cluster class, contains the characteristics of the cluster/smear
-    class Smear:
-        def __init__(self, number):
-            self.number = number
-            self.not_noise = 0
-
-    #find the atlas/ordering of the sources according to a pre-defined order (wanted_order)
-    def atlas(self, W, K, number_of_electrode, wanted_order):
-        # plot the number_of_electrode in a way that makes sense
-        inverse = np.absolute(inv(np.matmul(W, K)))
-
-        order_electrode = np.full((number_of_electrode,), -1)
-        f_interpolate = []
-        for i in range(number_of_electrode):
-            # f_interpolate.append(griddata(points, inverse[:, i], (grid_x, grid_y), method='linear'))
-            interpolate_data = griddata(self.points, inverse[:, i], (self.grid_x, self.grid_y), method='linear')
-
-            norm_arr = Viz_ICA_Streaming._norm(interpolate_data)
-            f_interpolate.append(norm_arr)
-
-            # find atlas
-            data = f_interpolate[i]
-            # find red point
-            electrode = np.argmax(inverse[:, i])
-            order_electrode[i] = electrode
-
-        #########################
-        ###     Atlas     #######
-        #########################
-        # wondering if it will be faster to just check red for all 16.....
-        # check if duplicates (usually means one is noise/noiser)
-        unique, counts = np.unique(order_electrode, return_counts=True)
-        duplicates = unique[counts > 1]
-        # the potential electrode assignemnts
-        potential_electrodes = np.setdiff1d(np.arange(number_of_electrode), unique)
-        # the flattened coordinates array
-        flat_coordinates = np.ravel_multi_index((self.y_coor, self.x_coor), f_interpolate[0].shape)
-        # decide which one has noise and which doesn't by the amount of red -> larger than 0.75 in 0-1 scale:
-        smearDictionary = {}
-        for duplicate in duplicates:
-            indices = np.where(order_electrode == duplicate)[0]
-            flat_indices_sizes = []
-            for index in indices:
-                smearDictionary[index] = Viz_ICA_Streaming.Smear(index)
-                thresh = 0.75
-                array, size = Viz_ICA_Streaming._red_size(f_interpolate[index], thresh)
-                smearDictionary[index].array = array
-                smearDictionary[index].size = size
-                flat_indices_sizes.append(size)
-                smearDictionary[index].dup = duplicate
-
-            not_noise = np.argmin(flat_indices_sizes)
-            smearDictionary[indices[not_noise]].not_noise = 1
-
-        combined_sorted_list, key_mapping_sorted = Viz_ICA_Streaming._combine_and_sort(smearDictionary)
-
-        # loop from least noisy to most noisy
-        for i, size in enumerate(combined_sorted_list):
-            key = key_mapping_sorted[i]
-            if (smearDictionary[key].not_noise != 1):  # if it is not a minumum from its duplicates
-                array = smearDictionary[key].array
-                noise_electrodes = np.nonzero(np.in1d(flat_coordinates, array))[0]
-                common_electrodes = noise_electrodes[np.nonzero(np.in1d(noise_electrodes, potential_electrodes))[
-                    0]]  # find the electrodes included in the red area
-                thresh = 0.75
-                overlap_bubble = False
-                thresh_bool = False
-                while (len(common_electrodes) == 0):
-                    thresh = thresh - 0.05  # might make harsher - 0.75 - 0.5 - 0.25 steps
-                    array, size = Viz_ICA_Streaming._red_size(f_interpolate[key], thresh)
-                    noise_electrodes = np.nonzero(np.in1d(flat_coordinates, array))[0]
-                    common_electrodes = noise_electrodes[np.nonzero(np.in1d(noise_electrodes, potential_electrodes))[
-                        0]]  # find the electrodes included in the red area
-
-                    # if common_electrodes is empty, check if the area around electrode 15 is an option
-                    if (len(common_electrodes) == 0 and 15 in potential_electrodes):
-                        bubble_y, bubble_x = np.mgrid[self.y_coor[15]:self.y_coor[15] + 5, self.x_coor[15] - 4:self.x_coor[15] + 1]
-                        electrode_15_bubble = np.ravel_multi_index((bubble_y, bubble_x), f_interpolate[0].shape)
-                        overlap_bubble = np.any(np.in1d(electrode_15_bubble, array))
-                        if (overlap_bubble):
-                            chosen_electrode = 15
-                            order_electrode[key] = chosen_electrode
-                            break
-                    # threshold to assign randomly and break if no source is found
-                    if (thresh < 0.1):
-                        chosen_electrode = potential_electrodes[0]
-                        order_electrode[key] = chosen_electrode
-                        thresh_bool = True
-                        break
-
-                if ((not overlap_bubble) and (thresh_bool == False)):
-                    red_values = np.zeros(len(common_electrodes))
-                    for j in range(len(common_electrodes)):
-                        red_values[j] = f_interpolate[key][
-                            self.y_coor[common_electrodes[j]], self.x_coor[common_electrodes[j]]]  # find the 'redness' value
-
-                    chosen_electrode = common_electrodes[np.argmax(red_values)]  # assign the electrode that is most red
-                    order_electrode[key] = chosen_electrode
-
-                # update potential electrode list
-                potential_electrodes = potential_electrodes[potential_electrodes != chosen_electrode]
-
-        array_indices = np.argsort(order_electrode)[wanted_order]
-        return array_indices, f_interpolate
 
     def _update_data(self, data: Data):
 
@@ -423,24 +275,24 @@ class Viz_ICA_Streaming:
         if self.plot_exg and self.plot_imu:
             # Make full matrices same size and concatenate
             max_len = max(data_exg.shape[0], data_imu.shape[0])
-            data_exg = Viz_ICA_Streaming._correct_matrix(data_exg, max_len)
-            data_imu = Viz_ICA_Streaming._correct_matrix(data_imu, max_len)
+            data_exg = Electrodes_Raw_Streaming._correct_matrix(data_exg, max_len)
+            data_imu = Electrodes_Raw_Streaming._correct_matrix(data_imu, max_len)
             all_data = np.hstack((data_exg, data_imu))
 
         elif self.plot_exg:
-            data_exg = Viz_ICA_Streaming._correct_matrix(data_exg, data_exg.shape[0])
+            data_exg = Electrodes_Raw_Streaming._correct_matrix(data_exg, data_exg.shape[0])
             all_data = data_exg
 
         elif self.plot_imu:
-            data_imu = Viz_ICA_Streaming._correct_matrix(data_imu, data_imu.shape[0])
+            data_imu = Electrodes_Raw_Streaming._correct_matrix(data_imu, data_imu.shape[0])
             all_data = data_imu
         else:
             raise RuntimeError
 
         # Crop to correct size
         desired_samples = int(self.window_secs * fs)
-        all_data = Viz_ICA_Streaming._correct_matrix(all_data, desired_samples)
-        all_data, n_samples_cropped = Viz_ICA_Streaming._crop(all_data, desired_samples)
+        all_data = Electrodes_Raw_Streaming._correct_matrix(all_data, desired_samples)
+        all_data, n_samples_cropped = Electrodes_Raw_Streaming._crop(all_data, desired_samples)
         if self.xdata is None:
             max_samples = max((n_imu_samples, n_exg_samples))
             last_sec = max_samples / fs
@@ -460,21 +312,6 @@ class Viz_ICA_Streaming:
             time_str = f'{time_str}.{ms[0]}'
 
         return time_str
-
-
-    @staticmethod
-    def _format_time_ICA(time):
-
-        time_str = str(time)
-        if '.' in time_str:
-            sub_string=time_str.split('.')[0].split(':')
-            if (sub_string[0] == '0'):#up to the first hour show min:sec only
-                new_str = sub_string[1] + ':' + sub_string[2]
-            else:
-                new_str = sub_string[0] + ':' + sub_string[1] + ':' + sub_string[2]
-        else:
-            new_str='00:00'
-        return new_str
 
 
     def filter_raw(self, y):
@@ -502,9 +339,8 @@ class Viz_ICA_Streaming:
         return filtered_y
 
 
+    def update(self, *args, **kwargs):
 
-    def get_ica_data(self, *args, **kwargs):
-        #get data
         self._update_data(self.data)
 
         n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
@@ -512,64 +348,36 @@ class Viz_ICA_Streaming:
         q = int(len(self.xdata) / self.max_points)
         n_pts = int(len(self.xdata) / q)
         x = sig.decimate(self.xdata, q)
-
         ynotnan = ~np.all(np.isnan(self.ydata), axis=1)
         y = self.ydata[ynotnan, :]
-        # here I made a change and updated the resampling of 'y' with the customized ICA integration time
-        # instead of n_pts
-        y = y if np.any(np.isnan(y)) else sig.resample(y, int(self.ica_integration_time * self.fs), axis=0)
+        y = y if np.any(np.isnan(y)) else sig.resample(y, n_pts, axis=0)
 
         for i in range(len(self.axes)):
-            if(i%2==0):
+            if (i%2==0):
                 self.axes[i].set_xlim((x[0], x[-1]))
 
-        if(self.filter_data==True):
-            ica_y=self.filter_raw(y)
+        if (self.filter_data == True):
+            viz_y = self.filter_raw(y)
         else:
-            ica_y=y
-
-        # ica_start_time = time.time()
-        K, W, Y = picard(ica_y[:, :n_exg_channels].T, n_components=16, ortho=True, max_iter=200)  # ICA algorithm
-        # print('ICA took {} seconds'.format(time.time() - ica_start_time))  # to check the time it takes to run ICA
-
-        inverse = np.absolute(inv(np.matmul(W, K)))
-        grid_y, grid_x = np.mgrid[1:self.height + 1, 1:self.width + 1]
-        points = np.column_stack((self.x_coor, self.y_coor))
-
-        # find the order for the atlas
-        array_indices, f_interpolate = Viz_ICA_Streaming.atlas(self, W, K, 16, self.wanted_order)
+            viz_y = y
 
 
-        self.f_interpolate=f_interpolate
-        self.order=array_indices
+        # print(np.nanmax(viz_y))
 
-
-        return f_interpolate, array_indices, Y, x, n_pts
-
-
-    def update(self, *args, **kwargs):
-        f_interpolate, order, model, x, n_pts = self.get_ica_data()
-
-        source = 0
         for j in range(len(self.axes)):
             source = int(j / 2)
-            if (j % 2 != 0):
-                self.lines[j].set_array(f_interpolate[order[source]].ravel())
-            else:
-                new_model = sig.resample(model[order[source]], n_pts, axis=0)
-                #self.lines[i].set_data(x,model[source])
-                self.lines[j].set_data(x, new_model)
+            if (j % 2 == 0):
+                self.lines[j].set_data(x, viz_y[:, self.wanted_order[source]])
+        # self.axes[-1, -1].set_xlim((x[0], x[-1]))
 
-
-        # duration = how much time passed since starting - > this will be the text on the right
-        # the time one the left will be calculated as the time that passed - the window time
+        # Time of last update (must be inside axes for blit to work)
         duration = datetime.now() - self.init_time
-        time_right = Viz_ICA_Streaming._format_time_ICA(duration)
+        time_right = Electrodes_Raw_Streaming._format_time(duration)
         time_left = max(timedelta(seconds=0), duration - timedelta(seconds=self.window_secs))
-        time_left = Viz_ICA_Streaming._format_time_ICA(time_left)
+        time_left = Electrodes_Raw_Streaming._format_time(time_left)
         time_txt_artists = []
         for i in range(len(self.axes)):
-            if(i%2==0):
+            if (i%2==0):
                 time_txt_artists.append(self.axes[i].text(0.1, 0.05, time_left, transform=self.axes[i].transAxes, ha="left", size=9))
                 time_txt_artists.append(self.axes[i].text(0.85, 0.05, time_right, transform=self.axes[i].transAxes, ha="right", size=9))
 
@@ -580,9 +388,8 @@ class Viz_ICA_Streaming:
             for artist in self.axes[i].get_xticklabels():
                 artist.axes = self.axes[i]
                 xtick_artists.append(artist)
-        #xtick_artists = [artist for ax in self.axes[-1, :] for artist in ax.get_xticklabels()]
-        artists = lines_artists + time_txt_artists+  xtick_artists
-
+        # xtick_artists = [artist for ax in self.axes[-1, :] for artist in ax.get_xticklabels()]
+        artists = lines_artists + time_txt_artists + xtick_artists
 
         return artists
 
@@ -623,17 +430,6 @@ class Viz_ICA_Streaming:
     def stop_animation(self, event):
         self.animation.event_source.stop()
 
-    # to edit the ICA integration time
-    def submit_integ_time(self, text):
-        try:
-            self.ica_integration_time = float(text)
-            # self.window_secs = float(text)
-            # Use the entered number in your script as needed
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-        # print(self.window_secs)
-        print(self.ica_integration_time)
 
     def start(self):
         # do  blit = False to change the xaxis length....
@@ -659,9 +455,5 @@ class Viz_ICA_Streaming:
         # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
         # button_stop = Button(ax_stop, 'Stop')
         # button_stop.on_clicked(self.stop_animation)
-
-        textbox_ax = plt.axes([0.37, 0.01, 0.07, 0.025])
-        integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
-        integ_time.on_submit(self.submit_integ_time)
 
         # plt.show()
