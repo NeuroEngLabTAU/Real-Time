@@ -349,7 +349,6 @@ class Viz:
         for n in range(n_exg_channels + n_imu_channels):
             # filt = Filterer.filter_data(y[:, n], self.filters, self.data.fs_exg, verbose=False)
             # self.lines[n].set_data(x, filt)
-            print(max(viz_y[:, n]))
             self.lines[n].set_data(x, viz_y[:, n])
         self.axes[-1, -1].set_xlim((x[0], x[-1]))
 
@@ -454,4 +453,4 @@ class Viz:
         button_stop.on_clicked(self.stop_animation)
 
 
-        plt.show()
+        # plt.show()

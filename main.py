@@ -103,7 +103,7 @@ if __name__ == '__main__':
     # define the desired visualisation
     viz_raw = False  # raw signal streaming
     # viz_ica = False
-    viz_ica_streaming = True  # streaming ICA signals with heatmaps
+    viz_ica_streaming = False  # streaming ICA signals with heatmaps
     Electrodes_raw = True  # raw signal electrodes
 
     host_name = "127.0.0.1"
@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
     if viz_ica_streaming:
         viz = Viz_ICA_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=10, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
+                  update_interval_ms=500, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True)
 
     if viz_raw or viz_ica_streaming:
@@ -157,14 +157,17 @@ if __name__ == '__main__':
 
 
     if Electrodes_raw:
-        elctrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False,
-                   find_emg=False, filters=filters, update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
+        electrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False,
+                   find_emg=False, filters=filters, update_interval_ms=100, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
                    x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
-        electrodes_fig = elctrodes_streaming.start()
-
+        electrodes_fig = electrodes_streaming.start()
 
     plt.show()
+
+
+
+
 
     data.add_annotation("Stop recording")
     data.stop()
