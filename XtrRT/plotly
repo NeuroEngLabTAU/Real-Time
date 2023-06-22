@@ -1,0 +1,196 @@
+# import plotly.graph_objects as go
+# from plotly.subplots import make_subplots
+# import numpy as np
+#
+# # Load data
+# xdata = np.arange(0, 100, 0.1)
+# ydata = np.random.randn(2500, 16)
+#
+# # Prepare plots
+# n_rows = 16
+# n_cols = 1
+#
+# # Create subplots with specified number of rows and columns
+# fig = make_subplots(rows=n_rows, cols=n_cols, shared_xaxes=True, subplot_titles=["Raw data"])
+# fig.update_layout(autosize=True, title_text="Figure Title")
+#
+# # Add line plots to the subplots
+# for row in range(16):
+#     for col in range(n_cols):
+#         subplot_index = row * n_cols + col + 1
+#         fig.add_trace(
+#             go.Scatter(x=xdata, y=ydata[:, row], line=dict(width=0.5)),
+#             row=row + 1, col=col + 1
+#         )
+#         fig.update_yaxes(range=[-1, 1])
+#         fig.update_xaxes(showticklabels=False, row=row + 1, col=col + 1)
+#         fig.update_yaxes(title_text=f"{'IC'} {row + 1}", row=row + 1, col=col + 1)
+#
+# # Update subplot properties
+# fig.update_layout(showlegend=False)
+# fig.update_layout(margin=dict(t=80, b=20, l=20, r=20))
+#
+# # Show the figure
+# fig.show()
+
+
+
+
+
+
+# import plotly.graph_objects as go
+# from plotly.subplots import make_subplots
+# import numpy as np
+# import time
+#
+# # Prepare plots
+# n_rows = 16
+# n_cols = 1
+#
+# # Create subplots with specified number of rows and columns
+# fig = make_subplots(rows=n_rows, cols=n_cols, shared_xaxes=True, subplot_titles=["Raw data"])
+# fig.update_layout(autosize=True, title_text="Streaming Signals")
+#
+# # Create empty arrays to store the streaming data
+# stream_data = np.zeros((2500, n_rows))
+#
+# # Add line plots to the subplots
+# lines = []
+# for row in range(n_rows):
+#     for col in range(n_cols):
+#         subplot_index = row * n_cols + col + 1
+#         line = go.Scatter(x=[], y=[], line=dict(width=0.5))
+#         fig.add_trace(line, row=row + 1, col=col + 1)
+#
+#         lines.append(line)
+#         fig.update_yaxes(range=[-1, 1], row=row + 1, col=col + 1)
+#         fig.update_xaxes(showticklabels=False, row=row + 1, col=col + 1)
+#         fig.update_yaxes(title_text=f"{'IC'} {row + 1}", row=row + 1, col=col + 1)
+#
+# # Update subplot properties
+# fig.update_layout(showlegend=False)
+# fig.update_layout(margin=dict(t=100, b=50, l=50, r=50))
+#
+# # Open a connection to the plotly streaming API
+# fig.layout.update(title_text="Streaming Signals (updating every 200 ms)")
+# # fig.show()
+#
+# # Start streaming
+# # stream_ids = [token.token for token in stream_tokens]
+# stream_data_index = 0
+# while True:
+#     # Generate random data for the next time step
+#     new_data = np.random.randn(n_rows)
+#     stream_data[stream_data_index, :] = new_data
+#
+#     # Append the new data to the streaming tokens
+#     for i in range(16):
+#         fig.data[i].x = np.append(fig.data[i].x, stream_data_index)
+#         fig.data[i].y = np.append(fig.data[i].y, new_data[i])
+#
+#     # Increment the index for the next time step
+#     stream_data_index += 1
+#     print(stream_data_index)
+#
+#     # Update the figure
+#     fig.update_layout(title_text=f"Streaming Signals (updating every 200 ms) - Time Step: {stream_data_index}")
+#     fig.layout.update(showlegend=False)
+#     fig.update()
+#     # fig.show()
+#
+#     # Pause for 200 milliseconds
+#     time.sleep(0.2)
+#
+
+
+
+
+
+# import plotly.graph_objects as go
+# import plotly.widgets as widgets
+# import numpy as np
+# import time
+#
+# # Prepare plots
+# n_rows = 16
+# n_cols = 1
+#
+# # Create the figure with specified number of rows and columns
+# fig = go.FigureWidget()
+# fig.update_layout(autosize=True, title_text="Streaming Signals")
+#
+# # Create empty arrays to store the streaming data
+# stream_data = np.zeros((2500, n_rows))
+#
+# # Add line plots to the figure
+# for row in range(n_rows):
+#     line = fig.add_scatter(x=[], y=[], line=dict(width=0.5))
+#     fig.update_yaxes(range=[-1, 1], row=row + 1)
+#     fig.update_xaxes(showticklabels=False, row=row + 1)
+#     fig.update_yaxes(title_text=f"{'IC'} {row + 1}", row=row + 1)
+#
+# # Open a connection to the plotly streaming API
+# fig.layout.update(title_text="Streaming Signals (updating every 200 ms)")
+# fig.show()
+#
+# # Start streaming
+# stream_data_index = 0
+# while True:
+#     # Generate random data for the next time step
+#     new_data = np.random.randn(n_rows)
+#     stream_data[stream_data_index, :] = new_data
+#
+#     # Append the new data to the streaming traces
+#     for i in range(n_rows):
+#         fig.data[i].x = np.append(fig.data[i].x, stream_data_index)
+#         fig.data[i].y = np.append(fig.data[i].y, new_data[i])
+#
+#     # Increment the index for the next time step
+#     stream_data_index += 1
+#
+#     # Update the figure
+#     fig.update_layout(title_text=f"Streaming Signals (updating every 200 ms) - Time Step: {stream_data_index}")
+#     with fig.batch_update():
+#         fig.update_traces()
+#     time.sleep(0.2)
+
+
+
+
+
+
+import plotly.graph_objects as go
+import numpy as np
+import time
+
+# Prepare data
+n_points = 2500
+x_data = np.arange(n_points)
+y_data = np.random.randn(n_points)
+
+# Create figure
+fig = go.Figure()
+
+# Add an empty scatter trace with mode='lines'
+fig.add_scatter(x=[], y=[], mode='lines')
+
+# Set layout properties
+fig.update_layout(title='Streaming Signal', xaxis_title='Time', yaxis_title='Value')
+
+# Start streaming
+for i in range(n_points):
+    # Append new data point to the scatter trace
+    fig.data[0].x = np.append(fig.data[0].x, x_data[i])
+    fig.data[0].y = np.append(fig.data[0].y, y_data[i])
+
+    # Update the figure layout
+    fig.update_layout(title=f'Streaming Signal - Point {i+1}/{n_points}')
+
+    # Update the figure
+    fig.update_traces()
+
+    # Save the figure to an HTML file
+    fig.write_html('streaming_plot.html')
+
+    # Pause for 100ms
+    time.sleep(0.1)

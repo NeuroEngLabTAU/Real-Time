@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from PyQt5.QtCore import QThread, Qt, pyqtSignal, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow
 import threading
+import multiprocessing
 
 from XtrRT.data import Data #data collection
 from XtrRT.viz import Viz  #real time raw data plotting
@@ -101,11 +102,13 @@ def fill_polygon(vertices, num_rows, num_cols):
 
 
 if __name__ == '__main__':
+    # Create a multiprocessing context
+    ctx = multiprocessing.get_context('spawn')
 
     # define the desired visualisation
     viz_raw = False  # raw signal streaming
     # viz_ica = False
-    viz_ica_streaming = True  # streaming ICA signals with heatmaps
+    viz_ica_streaming = False  # streaming ICA signals with heatmaps
     Electrodes_raw = True  # raw signal electrodes
 
     host_name = "127.0.0.1"
@@ -150,8 +153,10 @@ if __name__ == '__main__':
     filters = {'highpass': {'W': 30}, 'comb': {'W': 50}}
 
     if viz_raw:
-        viz = Viz(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15, filter_data=True)
+        raw_fig = plt.figure()
+        raw_streaming = Viz(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+                  update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15, filter_data=True, fig=raw_fig)
+        raw_viz = raw_streaming.start()
 
 
     # if viz_ica:
@@ -160,21 +165,21 @@ if __name__ == '__main__':
     #               x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
     if viz_ica_streaming:
+        ica_fig = plt.figure()
         viz = Viz_ICA_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
                   update_interval_ms=10, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
-                  x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True)
-
-    if viz_raw or viz_ica_streaming:
-        viz_fig = viz.start()
-
+                  x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True, figure=ica_fig)
+        ica_viz = viz.start()
 
 
     if Electrodes_raw:
-        elctrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False,
-                   find_emg=False, filters=filters, update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
-                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
+        electrodes_fig, electrodes_axes = plt.subplots()
+        elctrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=2.5, plot_exg=True, plot_imu=False, plot_ica=False,
+                   find_emg=False, filters=filters, update_interval_ms=100, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
+                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True,
+                                                       figure=electrodes_fig, axes=electrodes_axes)
 
-        electrodes_fig = elctrodes_streaming.start()
+        electrodes_viz = elctrodes_streaming.start()
 
 
     plt.show()

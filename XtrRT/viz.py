@@ -10,6 +10,7 @@ import numpy as np
 from scipy.signal import butter, lfilter, filtfilt, iirnotch #for filtering the data
 from matplotlib.widgets import Button #for button in funcanimator
 
+import time
 
 from .data import Data, ConnectionTimeoutError
 
@@ -32,7 +33,8 @@ class Viz:
                  max_timeout: (int, None) = 15,
                  find_emg: bool = False,
                  filters: dict = None,
-                 filter_data: bool=False):
+                 filter_data: bool=False,
+                 figure=None,):
 
         assert plot_exg or plot_imu
 
@@ -42,7 +44,7 @@ class Viz:
         self.plot_ica = plot_ica if plot_ica and plot_exg else False
         self.window_secs = window_secs
         self.axes = None
-        self.figure = None
+        self.figure = figure
         self.ylim_exg = ylim_exg
         self.ylim_imu = ylim_imu
         self.xdata = None
@@ -349,7 +351,6 @@ class Viz:
         for n in range(n_exg_channels + n_imu_channels):
             # filt = Filterer.filter_data(y[:, n], self.filters, self.data.fs_exg, verbose=False)
             # self.lines[n].set_data(x, filt)
-            print(max(viz_y[:, n]))
             self.lines[n].set_data(x, viz_y[:, n])
         self.axes[-1, -1].set_xlim((x[0], x[-1]))
 
@@ -429,13 +430,13 @@ class Viz:
 
         # to start the animation
 
-    def start_animation(self, event):
-        self.animation.event_source.start()
-
-        # to stop the animation
-
-    def stop_animation(self, event):
-        self.animation.event_source.stop()
+    # def start_animation(self, event):
+    #     self.animation.event_source.start()
+    #
+    #     # to stop the animation
+    #
+    # def stop_animation(self, event):
+    #     self.animation.event_source.stop()
 
     def start(self):
 
@@ -444,14 +445,14 @@ class Viz:
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
 
-        # Create start and stop buttons
-        ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        button_start = Button(ax_start, 'Start')
-        button_start.on_clicked(self.start_animation)
-
-        ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
-        button_stop = Button(ax_stop, 'Stop')
-        button_stop.on_clicked(self.stop_animation)
+        # # Create start and stop buttons
+        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
+        # button_start = Button(ax_start, 'Start')
+        # button_start.on_clicked(self.start_animation)
+        #
+        # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
+        # button_stop = Button(ax_stop, 'Stop')
+        # button_stop.on_clicked(self.stop_animation)
 
 
         # plt.show()

@@ -44,7 +44,9 @@ class Electrodes_Raw_Streaming:
                  height: int=None,
                  image: np.ndarray[np.uint8] = None,
                  # d_interpolate: np.ndarray[np.float64] =None,
-                 filter_data: bool=False):
+                 filter_data: bool=False,
+                 figure=None,
+                 axes = None):
 
         assert plot_exg or plot_imu
 
@@ -53,8 +55,8 @@ class Electrodes_Raw_Streaming:
         self.plot_imu = plot_imu
         self.plot_ica = plot_ica if plot_ica and plot_exg else False
         self.window_secs = window_secs
-        self.axes = None
-        self.figure = None
+        self.axes = axes
+        self.figure = figure
         self.ylim_exg = ylim_exg
         self.ylim_imu = ylim_imu
         self.xdata = None
@@ -157,19 +159,19 @@ class Electrodes_Raw_Streaming:
         ratio = round(self.height / self.width, 1)
 
         # define layout for the plot
-        fig, axes = plt.subplots()
-        spec = fig.add_gridspec(row_num, col_num)
+        # fig, axes = plt.subplots()
+        spec = self.figure.add_gridspec(row_num, col_num)
 
         axs = []
         for i in range(row_num):
             for j in range(col_num):
                 if (j == 2 or j == 5 or j == 8 or j == 11):
-                    ax = fig.add_subplot(spec[i, j])
+                    ax = self.figure.add_subplot(spec[i, j])
                     axs.append(ax)
                 elif (j == 0 or j == 3 or j == 6 or j == 9):
-                    ax = fig.add_subplot(spec[i, j:j + 2])
+                    ax = self.figure.add_subplot(spec[i, j:j + 2])
                     axs.append(ax)
-        axes.axis('off')
+        self.axes.axis('off')
 
 
         source = 0
@@ -201,13 +203,13 @@ class Electrodes_Raw_Streaming:
 
 
         self.axes = axs
-        self.figure = fig
+        # self.figure = fig
 
         manager = plt.get_current_fig_manager()
         manager.window.showMaximized()
 
 
-        fig.subplots_adjust(left=0.05, right=0.975, bottom=0.05, top=0.95, hspace=0.5)
+        self.figure.subplots_adjust(left=0.05, right=0.975, bottom=0.05, top=0.95, hspace=0.5)
 
         self.figure.canvas.mpl_connect('close_event', self.close)
 
@@ -343,8 +345,8 @@ class Electrodes_Raw_Streaming:
 
         self._update_data(self.data)
 
-        n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
-        n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
+        # n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
+        # n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
         q = int(len(self.xdata) / self.max_points)
         n_pts = int(len(self.xdata) / q)
         x = sig.decimate(self.xdata, q)
@@ -398,37 +400,37 @@ class Electrodes_Raw_Streaming:
         print('Window closed.')
 
 
-    # Define the start/stop function for the button
-    def start_stop_callback(self, event):
-        if self.start_label == 'Start':
-            self.start_label = 'Stop'
-            self.start_time = datetime.now()
-            self.button_start.label.set_text(self.start_label)
-            self.timer_text.set_text('Elapsed time: 0.00 seconds')
-            self.timer.start()  # Start the timer
-            self.timer_running = True
-        else:
-            self.start_label = 'Start'
-            elapsed_time = datetime.now() - self.start_time
-            print('Elapsed time:', elapsed_time.total_seconds())
-            self.ica_integration_time = elapsed_time.total_seconds()
-            print('ICA integration time:', self.ica_integration_time)
-            self.button_start.label.set_text(self.start_label)
-            self.timer.stop()  # Stop the timer
-            self.timer_running = False
-
-    def update_timer(self):
-        if self.timer_running:
-            elapsed_time = datetime.now() - self.start_time
-            self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
-            self.figure.canvas.draw_idle()
-
-    def start_animation(self,event):
-        self.animation.event_source.start()
-
-    # to stop the animation
-    def stop_animation(self, event):
-        self.animation.event_source.stop()
+    # # Define the start/stop function for the button
+    # def start_stop_callback(self, event):
+    #     if self.start_label == 'Start':
+    #         self.start_label = 'Stop'
+    #         self.start_time = datetime.now()
+    #         self.button_start.label.set_text(self.start_label)
+    #         self.timer_text.set_text('Elapsed time: 0.00 seconds')
+    #         self.timer.start()  # Start the timer
+    #         self.timer_running = True
+    #     else:
+    #         self.start_label = 'Start'
+    #         elapsed_time = datetime.now() - self.start_time
+    #         print('Elapsed time:', elapsed_time.total_seconds())
+    #         self.ica_integration_time = elapsed_time.total_seconds()
+    #         print('ICA integration time:', self.ica_integration_time)
+    #         self.button_start.label.set_text(self.start_label)
+    #         self.timer.stop()  # Stop the timer
+    #         self.timer_running = False
+    #
+    # def update_timer(self):
+    #     if self.timer_running:
+    #         elapsed_time = datetime.now() - self.start_time
+    #         self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
+    #         self.figure.canvas.draw_idle()
+    #
+    # def start_animation(self,event):
+    #     self.animation.event_source.start()
+    #
+    # # to stop the animation
+    # def stop_animation(self, event):
+    #     self.animation.event_source.stop()
 
 
     def start(self):
@@ -436,24 +438,24 @@ class Electrodes_Raw_Streaming:
         self.animation = FuncAnimation(self.figure, self.update,
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
-        # create a timer object
-        self.timer = self.figure.canvas.new_timer(interval=200)
-        # add callback to timer
-        self.timer.add_callback(self.update_timer)
-
-        # Create a separate axes for the timer text
-        self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
-        self.timer_ax.axis('off')  # Turn off the axes
-        # create text object which will be updated every 0.1 second
-        self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
-
-        # Create start and stop buttons
-        ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        self.button_start = Button(ax_start, self.start_label)
-        self.button_start.on_clicked(self.start_stop_callback)
+        # # create a timer object
+        # self.timer = self.figure.canvas.new_timer(interval=200)
+        # # add callback to timer
+        # self.timer.add_callback(self.update_timer)
+        #
+        # # Create a separate axes for the timer text
+        # self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
+        # self.timer_ax.axis('off')  # Turn off the axes
+        # # create text object which will be updated every 0.1 second
+        # self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
+        #
+        # # Create start and stop buttons
+        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
+        # self.button_start = Button(ax_start, self.start_label)
+        # self.button_start.on_clicked(self.start_stop_callback)
 
         # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
         # button_stop = Button(ax_stop, 'Stop')
         # button_stop.on_clicked(self.stop_animation)
 
-        # plt.show()
+        plt.show()
