@@ -631,12 +631,12 @@ class Viz_ICA_Streaming:
             self.pause_label = 'Pause'
             self.button_pause.label.set_text(self.pause_label)
 
-    def start_animation(self,event):
-        self.animation.event_source.start()
-
-    # to stop the animation
-    def stop_animation(self, event):
-        self.animation.event_source.stop()
+    # def start_animation(self,event):
+    #     self.animation.event_source.start()
+    #
+    # # to stop the animation
+    # def stop_animation(self, event):
+    #     self.animation.event_source.stop()
 
     # to edit the ICA integration time
     # def submit_integ_time(self, text):
@@ -673,7 +673,7 @@ class Viz_ICA_Streaming:
 
         ax_pause = plt.axes([0.11, 0.01, 0.05, 0.025])
         self.button_pause = Button(ax_pause, self.pause_label)
-        self.button_pause.on_clicked(self.stop_animation)
+        self.button_pause.on_clicked(self.pause_resume_animation)
 
         # textbox_ax = plt.axes([0.37, 0.01, 0.07, 0.025])
         # self.integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
