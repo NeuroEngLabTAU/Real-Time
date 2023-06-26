@@ -116,14 +116,14 @@ if __name__ == '__main__':
 
     #upload your image - insert image path
 
-    # image_path = r"C:\Users\YH006_new\Simulation\Paul_45.jpg"
+    image_path = r"C:\Users\YH006_new\Simulation\Paul_45.jpg"
 
-    # Get the path of the current script
-    script_path = os.path.abspath(__file__)
-    # Get the directory containing the script
-    script_directory = os.path.dirname(script_path)
-    # Construct the image path relative to the script directory
-    image_path = os.path.join(script_directory, "face-muscles-anatomy.jpg")
+    # # Get the path of the current script
+    # script_path = os.path.abspath(__file__)
+    # # Get the directory containing the script
+    # script_directory = os.path.dirname(script_path)
+    # # Construct the image path relative to the script directory
+    # image_path = os.path.join(script_directory, "face-muscles-anatomy.jpg")
 
     image, height, width = image_load(image_path)
 
@@ -131,10 +131,10 @@ if __name__ == '__main__':
     #to select the electrodes locations on the image leave empty, otherwise load
     # x_coor=[]
     # y_coor=[]
-    x_coor = [557, 398, 336, 444, 466, 342, 389, 490, 601, 450, 335, 328, 422, 545, 551, 689]
-    y_coor = [836, 786, 690, 721, 657, 634, 586, 599, 567, 541, 537, 477, 387, 381, 290, 289]
-    # x_coor = np.load(r'C:\Users\YH006_new\Simulation\x_coor_45.npy')
-    # y_coor = np.load(r'C:\Users\YH006_new\Simulation\y_coor_45.npy')
+    # x_coor = [557, 398, 336, 444, 466, 342, 389, 490, 601, 450, 335, 328, 422, 545, 551, 689]
+    # y_coor = [836, 786, 690, 721, 657, 634, 586, 599, 567, 541, 537, 477, 387, 381, 290, 289]
+    x_coor = np.load(r'C:\Users\YH006_new\Simulation\x_coor_45.npy')
+    y_coor = np.load(r'C:\Users\YH006_new\Simulation\y_coor_45.npy')
     if len(x_coor)==0:  # if manually inserted coordinates, there is not need to get the electrode locations (otherwise select electrodes from image)
         get_location()
 
@@ -160,8 +160,8 @@ if __name__ == '__main__':
     #               x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
     if viz_ica_streaming:
-        viz = Viz_ICA_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=10, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
+        viz = Viz_ICA_Streaming(data, window_secs=10, ica_integration_time=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+                  update_interval_ms=100, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True)
 
     if viz_raw or viz_ica_streaming:
