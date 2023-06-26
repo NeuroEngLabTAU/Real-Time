@@ -33,6 +33,7 @@ class Viz_ICA_Streaming:
     def __init__(self,
                  data: Data,
                  window_secs: float = 10,
+                 ica_integration_time: float = 10,
                  plot_exg: bool = True,
                  plot_imu: bool = True,
                  plot_ica: bool = True,
@@ -81,7 +82,8 @@ class Viz_ICA_Streaming:
         self.fs=None #added sampling rate as attribute  (fs)
 
         # for the buttons on the figure:
-        self.ica_integration_time = 10  # default value of 10 seconds for ICA integration time
+        self.ica_integration_time = ica_integration_time  # default value of 10 seconds for ICA integration time
+        self.integ_time = None
         self.button_start = None
         self.start_label = 'Start'
         self.start_time = None
@@ -89,6 +91,8 @@ class Viz_ICA_Streaming:
         self.timer_ax = None
         self.timer_text = None
         self.timer_running = False
+        self.button_pause = None
+        self.pause_label = 'Pause'
 
 
         #define the arrangement order of  the atlas
@@ -592,76 +596,87 @@ class Viz_ICA_Streaming:
 
 
     # Define the start/stop function for the button
-    def start_stop_callback(self, event):
-        if self.start_label == 'Start':
-            self.start_label = 'Stop'
-            self.start_time = datetime.now()
-            self.button_start.label.set_text(self.start_label)
-            self.timer_text.set_text('Elapsed time: 0.00 seconds')
-            self.timer.start()  # Start the timer
-            self.timer_running = True
+    # def start_stop_callback(self, event):
+    #     if self.start_label == 'Start':
+    #         self.start_label = 'Stop'
+    #         self.start_time = datetime.now()
+    #         self.button_start.label.set_text(self.start_label)
+    #         # self.timer_text.set_text('Elapsed time: 0.00 seconds')
+    #         # self.timer.start()  # Start the timer
+    #         # self.timer_running = True
+    #     else:
+    #         self.start_label = 'Start'
+    #         elapsed_time = datetime.now() - self.start_time
+    #         print('Elapsed time:', elapsed_time.total_seconds())
+    #         self.ica_integration_time = elapsed_time.total_seconds()
+    #         print('ICA integration time:', self.ica_integration_time)
+    #         self.button_start.label.set_text(self.start_label)
+    #         # self.timer.stop()  # Stop the timer
+    #         # self.timer_running = False
+
+    # def update_timer(self):
+    #     if self.timer_running:
+    #         elapsed_time = datetime.now() - self.start_time
+    #         self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
+    #         self.figure.canvas.draw_idle()
+
+    def pause_resume_animation(self, event):
+        if self.pause_label == 'Pause':
+            self.animation.event_source.stop()
+            self.pause_label = 'Resume'
+            self.button_pause.label.set_text(self.pause_label)
         else:
-            self.start_label = 'Start'
-            elapsed_time = datetime.now() - self.start_time
-            print('Elapsed time:', elapsed_time.total_seconds())
-            self.ica_integration_time = elapsed_time.total_seconds()
-            print('ICA integration time:', self.ica_integration_time)
-            self.button_start.label.set_text(self.start_label)
-            self.timer.stop()  # Stop the timer
-            self.timer_running = False
+            self.animation.event_source.start()
+            self.pause_label = 'Pause'
+            self.button_pause.label.set_text(self.pause_label)
 
-    def update_timer(self):
-        if self.timer_running:
-            elapsed_time = datetime.now() - self.start_time
-            self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
-            self.figure.canvas.draw_idle()
-
-    def start_animation(self,event):
-        self.animation.event_source.start()
-
-    # to stop the animation
-    def stop_animation(self, event):
-        self.animation.event_source.stop()
+    # def start_animation(self,event):
+    #     self.animation.event_source.start()
+    #
+    # # to stop the animation
+    # def stop_animation(self, event):
+    #     self.animation.event_source.stop()
 
     # to edit the ICA integration time
-    def submit_integ_time(self, text):
-        try:
-            self.ica_integration_time = float(text)
-            # self.window_secs = float(text)
-            # Use the entered number in your script as needed
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-        # print(self.window_secs)
-        print(self.ica_integration_time)
+    # def submit_integ_time(self, text):
+    #     try:
+    #         self.ica_integration_time = float(text)
+    #         # self.window_secs = float(text)
+    #         # Use the entered number in your script as needed
+    #     except ValueError:
+    #         print("Invalid input. Please enter a number.")
+    #
+    #     # print(self.window_secs)
+    #     print(self.ica_integration_time)
 
     def start(self):
         # do  blit = False to change the xaxis length....
         self.animation = FuncAnimation(self.figure, self.update,
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
-        # create a timer object
-        self.timer = self.figure.canvas.new_timer(interval=200)
-        # add callback to timer
-        self.timer.add_callback(self.update_timer)
+        # # create a timer object
+        # self.timer = self.figure.canvas.new_timer(interval=200)
+        # # add callback to timer
+        # self.timer.add_callback(self.update_timer)
+        #
+        # # Create a separate axes for the timer text
+        # self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
+        # self.timer_ax.axis('off')  # Turn off the axes
+        # # create text object which will be updated every 0.1 second
+        # self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
 
-        # Create a separate axes for the timer text
-        self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
-        self.timer_ax.axis('off')  # Turn off the axes
-        # create text object which will be updated every 0.1 second
-        self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
+        # # Create start and stop buttons
+        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
+        # self.button_start = Button(ax_start, self.start_label)
+        # self.button_start.on_clicked(self.start_stop_callback)
 
-        # Create start and stop buttons
-        ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        self.button_start = Button(ax_start, self.start_label)
-        self.button_start.on_clicked(self.start_stop_callback)
+        # create pause / resume button
+        ax_pause = plt.axes([0.11, 0.01, 0.05, 0.025])
+        self.button_pause = Button(ax_pause, self.pause_label)
+        self.button_pause.on_clicked(self.pause_resume_animation)
 
-        # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
-        # button_stop = Button(ax_stop, 'Stop')
-        # button_stop.on_clicked(self.stop_animation)
-
-        textbox_ax = plt.axes([0.37, 0.01, 0.07, 0.025])
-        integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
-        integ_time.on_submit(self.submit_integ_time)
+        # textbox_ax = plt.axes([0.37, 0.01, 0.07, 0.025])
+        # self.integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
+        # self.integ_time.on_submit(self.submit_integ_time)
 
         # plt.show()
