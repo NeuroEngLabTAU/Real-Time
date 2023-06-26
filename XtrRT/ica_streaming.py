@@ -531,9 +531,9 @@ class Viz_ICA_Streaming:
         else:
             ica_y=y
 
-        ica_start_time = time.time()
+        # ica_start_time = time.time()
         K, W, Y = picard(ica_y[:, :n_exg_channels].T, n_components=16, ortho=True, max_iter=200)  # ICA algorithm
-        print('ICA took {} seconds'.format(time.time() - ica_start_time))  # to check the time it takes to run ICA
+        # print('ICA took {} seconds'.format(time.time() - ica_start_time))  # to check the time it takes to run ICA
 
         inverse = np.absolute(inv(np.matmul(W, K)))
         grid_y, grid_x = np.mgrid[1:self.height + 1, 1:self.width + 1]
