@@ -182,6 +182,11 @@ class Viz_ICA_Streaming:
         axes.axis('off')
 
 
+        sources_names = ['Orbicularis or. / Depressores', 'Buccinator / (Platysma)', 'Zygomaticus ma. / Masseter',
+                         'Risorius / Buccinator', 'Zygomaticus ma.', 'Zygomaticus ma.', 'Zygomaticus ma. / mi.',
+                         'Levator labii s. (a.n./L.a.o.)', 'Levator l.s.a.n / Orbicularis oc.', 'Orbicularis oc.',
+                         'Zygomaticus mi./ma.', 'Temporalis / Orbicularis oc.', 'Orbicularis oc. / Temporalis',
+                         'Orbicularis oc. / Frontalis l.', 'Frontalis m. / Corrugator s.', 'Frontalis m. / Corrugator s.']
         source = 0
         for j in range(len(axs)):
             source = int(j / 2)
@@ -196,7 +201,8 @@ class Viz_ICA_Streaming:
                 axs[j].margins(0)
                 axs[j].set_ylim(self.ylim_exg)
                 self.lines.append(line)
-                axs[j].set_title('source %d' % (self.wanted_order[source] + 1), fontsize=15)
+                # axs[j].set_title('source %d' % (self.wanted_order[source] + 1), fontsize=15)
+                axs[j].set_title(sources_names[self.wanted_order[source]], fontsize=12)
             axs[j].xaxis.set_ticklabels([])
             axs[j].xaxis.set_ticks([])
 
@@ -471,13 +477,13 @@ class Viz_ICA_Streaming:
 
         time_str = str(time)
         if '.' in time_str:
-            sub_string=time_str.split('.')[0].split(':')
-            if (sub_string[0] == '0'):#up to the first hour show min:sec only
+            sub_string = time_str.split('.')[0].split(':')
+            if (sub_string[0] == '0'):  # up to the first hour show min:sec only
                 new_str = sub_string[1] + ':' + sub_string[2]
             else:
                 new_str = sub_string[0] + ':' + sub_string[1] + ':' + sub_string[2]
         else:
-            new_str='00:00'
+            new_str = '00:00'
         return new_str
 
 
