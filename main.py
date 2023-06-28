@@ -106,7 +106,10 @@ if __name__ == '__main__':
     viz_raw = False  # raw signal streaming
     # viz_ica = False
     viz_ica_streaming = True  # streaming ICA signals with heatmaps
-    Electrodes_raw = True  # raw signal electrodes
+    Electrodes_raw = False  # raw signal electrodes
+
+    ica_integration_time = 10  # seconds
+    window_secs = 10  # seconds
 
     host_name = "127.0.0.1"
     port = 20001
@@ -150,7 +153,7 @@ if __name__ == '__main__':
     filters = {'highpass': {'W': 30}, 'comb': {'W': 50}}
 
     if viz_raw:
-        viz = Viz(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+        viz = Viz(data, window_secs=window_secs, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
                   update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15, filter_data=True)
 
 
@@ -160,7 +163,7 @@ if __name__ == '__main__':
     #               x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
     if viz_ica_streaming:
-        viz = Viz_ICA_Streaming(data, window_secs=10, ica_integration_time=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+        viz = Viz_ICA_Streaming(data, window_secs=window_secs, ica_integration_time=ica_integration_time, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
                   update_interval_ms=100, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True)
 
@@ -170,7 +173,7 @@ if __name__ == '__main__':
 
 
     if Electrodes_raw:
-        elctrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False,
+        elctrodes_streaming = Electrodes_Raw_Streaming(data, window_secs=window_secs, plot_exg=True, plot_imu=False, plot_ica=False,
                    find_emg=False, filters=filters, update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15,
                    x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
