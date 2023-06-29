@@ -6,18 +6,18 @@ N_PHYSICAL_CHANNELS_EXG = 16
 N_PHYSICAL_CHANNELS_IMU = 3
 
 # Digital-to-physical conversions
-EARTH_G_ACCL = 9.80665
 PHYS_MAX_EXG = 12582.912
 PHYS_MIN_EXG = -PHYS_MAX_EXG
-PHYS_MAX_ACC = EARTH_G_ACCL * 2
+PHYS_MAX_ACC = 16  # 16g
 PHYS_MIN_ACC = -PHYS_MAX_ACC
-PHYS_MAX_GYR = 2000
+PHYS_MAX_GYR = 2000  # deg/sec
 PHYS_MIN_GYR = -PHYS_MAX_GYR
 EXG_BITS = 15
 IMU_BITS = 16
 DATA_RESOLUTION = {"EXG": (PHYS_MAX_EXG - PHYS_MIN_EXG) / 2**EXG_BITS,
-                   "Acc": (PHYS_MAX_ACC - PHYS_MIN_ACC),
-                   "Gyro": (PHYS_MAX_GYR - PHYS_MIN_GYR) / 2**IMU_BITS}
+                   "Acc": (PHYS_MAX_ACC - PHYS_MIN_ACC) / 2**IMU_BITS,
+                   "Gyro": (PHYS_MAX_GYR - PHYS_MIN_GYR) / 2**IMU_BITS,
+                   }
 EXPECTED_SAMPLES_PER_RECORD = {250: {"EXG": 7, "IMU": 5, "Acc": 10, "Gyro": 10},
                                500: {"EXG": 15, "IMU": 10, "Acc": 20, "Gyro": 20}}
 
@@ -63,12 +63,12 @@ class Record:
         if record_type == "EXG":
             self.data = DATA_RESOLUTION["EXG"] * (data - 2**(EXG_BITS-1))
         elif record_type == "Acc":
-            self.data = DATA_RESOLUTION["Acc"] * data / 2**(IMU_BITS-1)
+            self.data = DATA_RESOLUTION["Acc"] * data
         elif record_type == "Gyro":
-            self.data = DATA_RESOLUTION["Gyro"] * data / 2**(IMU_BITS-1)
+            self.data = DATA_RESOLUTION["Gyro"] * data
         elif record_type == "IMU":
-            data1 = DATA_RESOLUTION["Acc"] * data[:, :3] / 2**(IMU_BITS-1)
-            data2 = DATA_RESOLUTION["Gyro"] * data[:, 3:] / 2**(IMU_BITS-1)
+            data1 = DATA_RESOLUTION["Acc"] * data[:, :3]
+            data2 = DATA_RESOLUTION["Gyro"] * data[:, 3:]
             self.data = np.hstack((data1, data2))
 
 
@@ -164,17 +164,15 @@ def parse_byte_arr(byte_arr):
                 samples[channel_index].extend(sample_buffer)
                 pointer += N_BYTES_PER_SAMPLE
 
-        if record_type == "EXG":  # TODO: remove with IMU
-            record = Record(record_type=record_type,
-                            data=np.array(samples).T,
-                            unix_time_secs=unix_time_secs,
-                            unix_time_ms=unix_time_ms,
-                            channel_mapping=channel_mapping,
-                            fs=sampling_rate,
-                            downsample=downsample,
-                            packet_idx=packet_idx,
-                            record_len=record_len)
-
-            records.append(record)
+        record = Record(record_type=record_type,
+                        data=np.array(samples).T,
+                        unix_time_secs=unix_time_secs,
+                        unix_time_ms=unix_time_ms,
+                        channel_mapping=channel_mapping,
+                        fs=sampling_rate,
+                        downsample=downsample,
+                        packet_idx=packet_idx,
+                        record_len=record_len)
+        records.append(record)
 
     return records
