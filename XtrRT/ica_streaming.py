@@ -597,7 +597,7 @@ class Viz_ICA_Streaming:
         return artists
 
     def close(self, _):
-        self.data.is_connected = False
+        # self.data.is_connected = False
         print('Window closed.')
 
 
