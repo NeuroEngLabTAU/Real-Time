@@ -469,7 +469,7 @@ class Viz:
         return self.axes
 
     def close(self, _):
-        self.data.is_connected = False
+        # self.data.is_connected = False
         print('Window closed.')
 
     def start(self):

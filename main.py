@@ -18,7 +18,9 @@ import numpy as np
 from matplotlib.path import Path
 
 import os
-
+import datetime
+import time
+import keyboard
 
 #########################
 ###### Load image #######
@@ -106,10 +108,39 @@ if __name__ == '__main__':
     viz_raw = False  # Aaron's real time raw data plotting
     # viz_ica = False  # Bara's semi real-time ICA
     viz_ica_streaming = True  # streaming ICA signals with heatmaps
-    Electrodes_raw = False  # raw signal electrodes
+    Electrodes_raw = True  # raw signal electrodes
 
     ica_integration_time = 10  # seconds
     window_secs = 10  # seconds
+
+    if viz_ica_streaming or Electrodes_raw:
+        #upload your image - insert image path
+        image_path = r"C:\Users\YH006_new\Simulation\Paul_45.jpg"
+
+        # # Get the path of the current script
+        # script_path = os.path.abspath(__file__)
+        # # Get the directory containing the script
+        # script_directory = os.path.dirname(script_path)
+        # # Construct the image path relative to the script directory
+        # image_path = os.path.join(script_directory, "face-muscles-anatomy.jpg")
+
+        image, height, width = image_load(image_path)
+
+
+        #to select the electrodes locations on the image leave empty, otherwise load
+        # x_coor=[]
+        # y_coor=[]
+        # x_coor = [557, 398, 336, 444, 466, 342, 389, 490, 601, 450, 335, 328, 422, 545, 551, 689]
+        # y_coor = [836, 786, 690, 721, 657, 634, 586, 599, 567, 541, 537, 477, 387, 381, 290, 289]
+        x_coor = np.load(r'C:\Users\YH006_new\Simulation\x_coor_45.npy')
+        y_coor = np.load(r'C:\Users\YH006_new\Simulation\y_coor_45.npy')
+        if len(x_coor)==0:  # if manually inserted coordinates, there is not need to get the electrode locations (otherwise select electrodes from image)
+            get_location()
+
+        # create dummy heatmap for funcAnimator setup
+        vertices = list(zip(x_coor, y_coor))
+        num_rows, num_cols = height, width
+        d_interpolate = fill_polygon(vertices, num_rows, num_cols)
 
     host_name = "127.0.0.1"
     port = 20001
@@ -117,38 +148,12 @@ if __name__ == '__main__':
     data = Data(host_name, port, verbose=False, timeout_secs=15, save_as="test.edf")
     data.start()
 
-    #upload your image - insert image path
+    while not data.has_data:  # Wait to start collecting data before doing anything
+        continue
 
-    image_path = r"C:\Users\YH006_new\Simulation\Paul_45.jpg"
-
-    # # Get the path of the current script
-    # script_path = os.path.abspath(__file__)
-    # # Get the directory containing the script
-    # script_directory = os.path.dirname(script_path)
-    # # Construct the image path relative to the script directory
-    # image_path = os.path.join(script_directory, "face-muscles-anatomy.jpg")
-
-    image, height, width = image_load(image_path)
-
-
-    #to select the electrodes locations on the image leave empty, otherwise load
-    # x_coor=[]
-    # y_coor=[]
-    # x_coor = [557, 398, 336, 444, 466, 342, 389, 490, 601, 450, 335, 328, 422, 545, 551, 689]
-    # y_coor = [836, 786, 690, 721, 657, 634, 586, 599, 567, 541, 537, 477, 387, 381, 290, 289]
-    x_coor = np.load(r'C:\Users\YH006_new\Simulation\x_coor_45.npy')
-    y_coor = np.load(r'C:\Users\YH006_new\Simulation\y_coor_45.npy')
-    if len(x_coor)==0:  # if manually inserted coordinates, there is not need to get the electrode locations (otherwise select electrodes from image)
-        get_location()
-
-    # create dummy heatmap for funcAnimator setup
-    vertices = list(zip(x_coor, y_coor))
-    num_rows, num_cols = height, width
-    d_interpolate = fill_polygon(vertices, num_rows, num_cols)
-
-
+    start_time = datetime.datetime.now()
+    print('started data recording at: ', start_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
     data.add_annotation("Start recording")
-
 
     filters = {'highpass': {'W': 30}, 'comb': {'W': 50}}
 
@@ -183,11 +188,24 @@ if __name__ == '__main__':
 
         elctrodes_streaming.start()
 
+    if viz_raw or viz_ica_streaming or Electrodes_raw:
+        plt.show()
 
-    plt.show()
+    time.sleep(1)
+    # to stop the recording press esc
+    print('press \'esc\' to stop data recording')
 
-    data.add_annotation("Stop recording")
+    while True:
+        if keyboard.is_pressed('esc'):
+            break
+        time.sleep(0.1)
+
+    total_time = datetime.datetime.now() - start_time
+    data.add_annotation("Stop recording at " + f"{int(total_time.total_seconds() // 60):02d}:"
+                                               f"{int(total_time.total_seconds() % 60):02d}."
+                                               f"{total_time.microseconds // 1000:03d}")
     data.stop()
+    print('stopped data recording at: ', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
 
     print(data.annotations)
     print('process terminated')
