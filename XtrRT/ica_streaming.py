@@ -34,6 +34,7 @@ class Viz_ICA_Streaming:
                  data: Data,
                  window_secs: float = 10,
                  ica_integration_time: float = 10,
+                 stop_ica: bool = False,
                  plot_exg: bool = True,
                  plot_imu: bool = True,
                  plot_ica: bool = True,
@@ -65,6 +66,7 @@ class Viz_ICA_Streaming:
         self.ylim_imu = ylim_imu
         self.xdata = None
         self.ydata = None
+        self.data_for_ica = None
         self.lines = []
         self.pause_time= None
         self.unpause_time = None
@@ -77,22 +79,17 @@ class Viz_ICA_Streaming:
         self.new_max_points=max_points
         self._backend = None
 
-        self.pause=False
+        self.pause = False
 
-        self.fs=None #added sampling rate as attribute  (fs)
+        self.fs = None  # added sampling rate as attribute  (fs)
 
         # for the buttons on the figure:
         self.ica_integration_time = ica_integration_time  # default value of 10 seconds for ICA integration time
+        self.stop_ica = stop_ica  # defines if ICA will be calculated all the time or only until it is stopped
         self.integ_time = None
-        self.button_start = None
-        self.start_label = 'Start'
-        self.start_time = None
-        self.timer = None
-        self.timer_ax = None
-        self.timer_text = None
-        self.timer_running = False
         self.button_pause = None
         self.pause_label = 'Pause'
+        self.ica_converged = False  # flag for ICA convergence
 
 
         #define the arrangement order of  the atlas
@@ -115,6 +112,8 @@ class Viz_ICA_Streaming:
 
         #added the option to filter the data
         self.filter_data=filter_data
+
+        self.updates_counter = 0  # counter for the updates of this class
 
 
         # Confirm initial data retrieval before continuing (or raise Error if timeout)
@@ -393,7 +392,7 @@ class Viz_ICA_Streaming:
         return array_indices, f_interpolate
 
     def _update_data(self, data: Data):
-
+        print('data.exg_data.shape', data.exg_data.shape)
         # Get new data
         if self.plot_exg and data.exg_data is not None:
             n_exg_samples, n_exg_channels = data.exg_data.shape
@@ -423,11 +422,14 @@ class Viz_ICA_Streaming:
 
         # Get old data
         old_data_exg = np.full((0, n_exg_channels), np.nan) if self.ydata is None else self.ydata[:, :n_exg_channels]
+        old_data_for_ica = np.full((0, n_exg_channels), np.nan) if self.data_for_ica is None else self.data_for_ica[:, :n_exg_channels]
         old_data_imu = np.full((0, n_imu_channels), np.nan) if self.ydata is None else self.ydata[:, n_exg_channels:]
         old_data_exg = old_data_exg[~np.all(np.isnan(old_data_exg), axis=1), :]
+        old_data_for_ica = old_data_for_ica[~np.all(np.isnan(old_data_for_ica), axis=1), :]
         old_data_imu = old_data_imu[~np.all(np.isnan(old_data_imu), axis=1), :]
 
         data_exg = np.vstack((old_data_exg, new_data_exg)) if old_data_exg.size else new_data_exg
+        data_for_ica = np.vstack((old_data_for_ica, new_data_exg)) if old_data_for_ica.size else new_data_exg
         data_imu = np.vstack((old_data_imu, new_data_imu)) if old_data_imu.size else new_data_imu
 
         if self.plot_exg and self.plot_imu:
@@ -438,11 +440,12 @@ class Viz_ICA_Streaming:
             all_data = np.hstack((data_exg, data_imu))
 
         elif self.plot_exg:
-            data_exg = Viz_ICA_Streaming._correct_matrix(data_exg, data_exg.shape[0])
+            # data_exg = Viz_ICA_Streaming._correct_matrix(data_exg, data_exg.shape[0])
+            # data_for_ica = Viz_ICA_Streaming._correct_matrix(data_for_ica, data_for_ica.shape[0])
             all_data = data_exg
 
         elif self.plot_imu:
-            data_imu = Viz_ICA_Streaming._correct_matrix(data_imu, data_imu.shape[0])
+            # data_imu = Viz_ICA_Streaming._correct_matrix(data_imu, data_imu.shape[0])
             all_data = data_imu
         else:
             raise RuntimeError
@@ -451,6 +454,10 @@ class Viz_ICA_Streaming:
         desired_samples = int(self.window_secs * fs)
         all_data = Viz_ICA_Streaming._correct_matrix(all_data, desired_samples)
         all_data, n_samples_cropped = Viz_ICA_Streaming._crop(all_data, desired_samples)
+        print('all_data shape after crop: ', all_data.shape)
+        data_for_ica = Viz_ICA_Streaming._correct_matrix(data_for_ica, int(self.ica_integration_time * fs))
+        data_for_ica, _ = Viz_ICA_Streaming._crop(data_for_ica, int(self.ica_integration_time * fs))
+        print('data_for_ica shape after crop: ', data_for_ica.shape)
         if self.xdata is None:
             max_samples = max((n_imu_samples, n_exg_samples))
             last_sec = max_samples / fs
@@ -460,6 +467,7 @@ class Viz_ICA_Streaming:
 
         self.xdata += n_samples_cropped / fs
         self.ydata = all_data
+        self.data_for_ica = data_for_ica
 
     @staticmethod
     def _format_time(time):
@@ -518,58 +526,99 @@ class Viz_ICA_Streaming:
         self._update_data(self.data)
 
         n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
-        n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
+        # n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
         q = int(len(self.xdata) / self.max_points)
         n_pts = int(len(self.xdata) / q)
         x = sig.decimate(self.xdata, q)
 
         ynotnan = ~np.all(np.isnan(self.ydata), axis=1)
         y = self.ydata[ynotnan, :]
+        y = y if np.any(np.isnan(y)) else sig.resample(y, n_pts, axis=0)
+
+        data_for_ica_notnan = ~np.all(np.isnan(self.data_for_ica), axis=1)
+        ica_y = self.data_for_ica[data_for_ica_notnan, :]
         # here I made a change and updated the resampling of 'y' with the customized ICA integration time
         # instead of n_pts
-        y = y if np.any(np.isnan(y)) else sig.resample(y, int(self.ica_integration_time * self.fs), axis=0)
+        ica_y = ica_y if np.any(np.isnan(ica_y)) else sig.resample(ica_y, int(self.ica_integration_time * self.fs), axis=0)
 
         for i in range(len(self.axes)):
             if(i%2==0):
                 self.axes[i].set_xlim((x[0], x[-1]))
 
         if(self.filter_data==True):
-            ica_y=self.filter_raw(y)
-        else:
-            ica_y=y
+            ica_y = self.filter_raw(ica_y)
 
-        # ica_start_time = time.time()
+        ica_start_time = time.time()
         K, W, Y = picard(ica_y[:, :n_exg_channels].T, n_components=16, ortho=True, max_iter=200)  # ICA algorithm
-        # print('ICA took {} seconds'.format(time.time() - ica_start_time))  # to check the time it takes to run ICA
+        print('ICA took {} seconds'.format(time.time() - ica_start_time))  # to check the time it takes to run ICA
 
-        inverse = np.absolute(inv(np.matmul(W, K)))
-        grid_y, grid_x = np.mgrid[1:self.height + 1, 1:self.width + 1]
-        points = np.column_stack((self.x_coor, self.y_coor))
+        self.unmixing_mat = np.dot(W, K)  # unmixing matrix from the ICA
+        model = np.dot(self.unmixing_mat, y[:, :n_exg_channels].T)
+        # inverse = np.absolute(inv(np.matmul(W, K)))
+        # grid_y, grid_x = np.mgrid[1:self.height + 1, 1:self.width + 1]
+        # points = np.column_stack((self.x_coor, self.y_coor))
 
         # find the order for the atlas
         array_indices, f_interpolate = Viz_ICA_Streaming.atlas(self, W, K, 16, self.wanted_order)
 
+        self.f_interpolate = f_interpolate
+        self.order = array_indices
 
-        self.f_interpolate=f_interpolate
-        self.order=array_indices
+        return f_interpolate, array_indices, model, x, n_pts
 
 
-        return f_interpolate, array_indices, Y, x, n_pts
+    def after_convergence_ica_plot(self):
+        # get data
+        self._update_data(self.data)
+
+        n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
+        # n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
+        q = int(len(self.xdata) / self.max_points)
+        n_pts = int(len(self.xdata) / q)
+        x = sig.decimate(self.xdata, q)
+
+        ynotnan = ~np.all(np.isnan(self.ydata), axis=1)
+        y = self.ydata[ynotnan, :]
+        y = y if np.any(np.isnan(y)) else sig.resample(y, n_pts, axis=0)
+
+        for i in range(len(self.axes)):
+            if (i % 2 == 0):
+                self.axes[i].set_xlim((x[0], x[-1]))
+
+
+        model = np.dot(self.unmixing_mat, y[:, :n_exg_channels].T)  # the signal according to the previous ICA unmixing matrix
+
+        return model, x, n_pts
 
 
     def update(self, *args, **kwargs):
-        f_interpolate, order, model, x, n_pts = self.get_ica_data()
+        self.updates_counter += 1
+        if self.stop_ica:
+            self.ica_integration_time = self.data.exg_data.shape[0] / self.fs
+        print('ICA integration time: ', self.ica_integration_time, 'updates counter: ', self.updates_counter)
 
-        source = 0
-        for j in range(len(self.axes)):
-            source = int(j / 2)
-            if (j % 2 != 0):
-                self.lines[j].set_array(f_interpolate[order[source]].ravel())
-            else:
-                new_model = sig.resample(model[order[source]], n_pts, axis=0)
-                #self.lines[i].set_data(x,model[source])
-                self.lines[j].set_data(x, new_model)
+        if not self.ica_converged:  # if the button for ica convergence wasn't pressed yet
+            f_interpolate, order, model, x, n_pts = self.get_ica_data()
 
+            source = 0
+            for j in range(len(self.axes)):
+                source = int(j / 2)
+                if (j % 2 != 0):
+                    self.lines[j].set_array(f_interpolate[order[source]].ravel())
+                else:
+                    new_model = sig.resample(model[order[source]], n_pts, axis=0)
+                    #self.lines[i].set_data(x,model[source])
+                    self.lines[j].set_data(x, new_model)
+
+        else:
+            model, x, n_pts = self.after_convergence_ica_plot()
+            order = self.order
+            for j in range(len(self.axes)):
+                source = int(j / 2)
+                if (j % 2 == 0):
+                    new_model = sig.resample(model[order[source]], n_pts, axis=0)
+                    #self.lines[i].set_data(x,model[source])
+                    self.lines[j].set_data(x, new_model)
 
         # duration = how much time passed since starting - > this will be the text on the right
         # the time one the left will be calculated as the time that passed - the window time
@@ -600,32 +649,6 @@ class Viz_ICA_Streaming:
         # self.data.is_connected = False
         print('Window closed.')
 
-
-    # Define the start/stop function for the button
-    # def start_stop_callback(self, event):
-    #     if self.start_label == 'Start':
-    #         self.start_label = 'Stop'
-    #         self.start_time = datetime.now()
-    #         self.button_start.label.set_text(self.start_label)
-    #         # self.timer_text.set_text('Elapsed time: 0.00 seconds')
-    #         # self.timer.start()  # Start the timer
-    #         # self.timer_running = True
-    #     else:
-    #         self.start_label = 'Start'
-    #         elapsed_time = datetime.now() - self.start_time
-    #         print('Elapsed time:', elapsed_time.total_seconds())
-    #         self.ica_integration_time = elapsed_time.total_seconds()
-    #         print('ICA integration time:', self.ica_integration_time)
-    #         self.button_start.label.set_text(self.start_label)
-    #         # self.timer.stop()  # Stop the timer
-    #         # self.timer_running = False
-
-    # def update_timer(self):
-    #     if self.timer_running:
-    #         elapsed_time = datetime.now() - self.start_time
-    #         self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
-    #         self.figure.canvas.draw_idle()
-
     def pause_resume_animation(self, event):
         if self.pause_label == 'Pause':
             self.animation.event_source.stop()
@@ -636,14 +659,11 @@ class Viz_ICA_Streaming:
             self.pause_label = 'Pause'
             self.button_pause.label.set_text(self.pause_label)
 
-    # def start_animation(self,event):
-    #     self.animation.event_source.start()
-    #
-    # # to stop the animation
-    # def stop_animation(self, event):
-    #     self.animation.event_source.stop()
+    # function to stop the ICA calculation
+    def converged_ica(self, event):
+        self.ica_converged = True
 
-    # to edit the ICA integration time
+    # # to edit the ICA integration time
     # def submit_integ_time(self, text):
     #     try:
     #         self.ica_integration_time = float(text)
@@ -651,8 +671,6 @@ class Viz_ICA_Streaming:
     #         # Use the entered number in your script as needed
     #     except ValueError:
     #         print("Invalid input. Please enter a number.")
-    #
-    #     # print(self.window_secs)
     #     print(self.ica_integration_time)
 
     def start(self):
@@ -660,29 +678,20 @@ class Viz_ICA_Streaming:
         self.animation = FuncAnimation(self.figure, self.update,
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
-        # # create a timer object
-        # self.timer = self.figure.canvas.new_timer(interval=200)
-        # # add callback to timer
-        # self.timer.add_callback(self.update_timer)
-        #
-        # # Create a separate axes for the timer text
-        # self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
-        # self.timer_ax.axis('off')  # Turn off the axes
-        # # create text object which will be updated every 0.1 second
-        # self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
-
-        # # Create start and stop buttons
-        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        # self.button_start = Button(ax_start, self.start_label)
-        # self.button_start.on_clicked(self.start_stop_callback)
 
         # create pause / resume button
         ax_pause = plt.axes([0.11, 0.01, 0.05, 0.025])
         self.button_pause = Button(ax_pause, self.pause_label)
         self.button_pause.on_clicked(self.pause_resume_animation)
 
+        if self.stop_ica:
+            # button to stop calculating ICA after ICA converged
+            self.button_ica_converged = Button(plt.axes([0.17, 0.01, 0.08, 0.025]), 'ICA converged!')
+            self.button_ica_converged.on_clicked(self.converged_ica)
+
+        # # create textbox for ICA integration time
         # textbox_ax = plt.axes([0.37, 0.01, 0.07, 0.025])
-        # self.integ_time = TextBox(textbox_ax, "ICA integration time:", initial='10')
+        # self.integ_time = TextBox(textbox_ax, "ICA integration time:", initial=self.ica_integration_time)
         # self.integ_time.on_submit(self.submit_integ_time)
 
         # plt.show()
