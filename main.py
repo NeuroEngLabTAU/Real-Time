@@ -108,9 +108,10 @@ if __name__ == '__main__':
     viz_raw = False  # Aaron's real time raw data plotting
     # viz_ica = False  # Bara's semi real-time ICA
     viz_ica_streaming = True  # streaming ICA signals with heatmaps
-    Electrodes_raw = True  # raw signal electrodes
+    Electrodes_raw = False  # raw signal electrodes
 
-    ica_integration_time = 10  # seconds
+    ica_integration_time = 15  # seconds
+    stop_ica = False
     window_secs = 10  # seconds
 
     if viz_ica_streaming or Electrodes_raw:
@@ -173,8 +174,9 @@ if __name__ == '__main__':
     #               x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, filter_data=True)
 
     if viz_ica_streaming:
-        ica_viz = Viz_ICA_Streaming(data, window_secs=window_secs, ica_integration_time=ica_integration_time, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=100, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
+        ica_viz = Viz_ICA_Streaming(data, window_secs=window_secs, ica_integration_time=ica_integration_time, stop_ica = stop_ica,
+                                    plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+                  update_interval_ms=400, ylim_exg=(-5, 5), max_points=None, max_timeout=15,
                   x_coor=x_coor, y_coor=y_coor, width=width, height=height, image=image, d_interpolate=d_interpolate, filter_data=True)
 
         ica_viz.start()
