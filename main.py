@@ -111,7 +111,9 @@ if __name__ == '__main__':
     Electrodes_raw = False  # raw signal electrodes
 
     ica_integration_time = 15  # seconds
-    stop_ica = False
+    stop_ica = False  # if True the ica will be calculated for all the recorded data (ica_integration_time will be ignored),
+    # until the button 'ICA converged!' is pressed, then the data will be plotted according to the unmixing matrix
+    # that was calculated last (when the button 'ICA converged!' was pressed)
     window_secs = 10  # seconds
 
     if viz_ica_streaming or Electrodes_raw:
