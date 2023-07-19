@@ -400,31 +400,6 @@ class Electrodes_Raw_Streaming:
         print('Window closed.')
 
 
-    # # Define the start/stop function for the button
-    # def start_stop_callback(self, event):
-    #     if self.start_label == 'Start':
-    #         self.start_label = 'Stop'
-    #         self.start_time = datetime.now()
-    #         self.button_start.label.set_text(self.start_label)
-    #         self.timer_text.set_text('Elapsed time: 0.00 seconds')
-    #         self.timer.start()  # Start the timer
-    #         self.timer_running = True
-    #     else:
-    #         self.start_label = 'Start'
-    #         elapsed_time = datetime.now() - self.start_time
-    #         print('Elapsed time:', elapsed_time.total_seconds())
-    #         self.ica_integration_time = elapsed_time.total_seconds()
-    #         print('ICA integration time:', self.ica_integration_time)
-    #         self.button_start.label.set_text(self.start_label)
-    #         self.timer.stop()  # Stop the timer
-    #         self.timer_running = False
-    #
-    # def update_timer(self):
-    #     if self.timer_running:
-    #         elapsed_time = datetime.now() - self.start_time
-    #         self.timer_text.set_text('Elapsed time: {:.2f} seconds'.format(elapsed_time.total_seconds()))
-    #         self.figure.canvas.draw_idle()
-    #
     def pause_resume_animation(self, event):
         if self.pause_label == 'Pause':
             self.animation.event_source.stop()
@@ -436,34 +411,11 @@ class Electrodes_Raw_Streaming:
             self.button_pause.label.set_text(self.pause_label)
 
 
-    # def start_animation(self,event):
-    #     self.animation.event_source.start()
-    #
-    # # to stop the animation
-    # def stop_animation(self, event):
-    #     self.animation.event_source.stop()
-
-
     def start(self):
         # do  blit = False to change the xaxis length....
         self.animation = FuncAnimation(self.figure, self.update,
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
-        # # create a timer object
-        # self.timer = self.figure.canvas.new_timer(interval=200)
-        # # add callback to timer
-        # self.timer.add_callback(self.update_timer)
-        #
-        # # Create a separate axes for the timer text
-        # self.timer_ax = self.figure.add_axes([0.11, 0.01, 0.05, 0.025])
-        # self.timer_ax.axis('off')  # Turn off the axes
-        # # create text object which will be updated every 0.1 second
-        # self.timer_text = self.timer_ax.text(0.11, 0.01, 'Elapsed time: 0.00 seconds', transform=self.timer_ax.transAxes, ha="left", va="center")
-        #
-        # # Create start and stop buttons
-        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        # self.button_start = Button(ax_start, self.start_label)
-        # self.button_start.on_clicked(self.start_stop_callback)
 
         # create pause / resume button
         ax_pause = plt.axes([0.11, 0.01, 0.05, 0.025])
