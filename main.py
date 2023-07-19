@@ -23,6 +23,7 @@ import time
 import keyboard
 import sys
 
+
 #########################
 ###### Load image #######
 #########################
@@ -79,8 +80,7 @@ def get_location():
     cv2.destroyAllWindows()
 
 
-
-#create a dummy heatmap
+# create a dummy heatmap
 def fill_polygon(vertices, num_rows, num_cols):
     # Create a grid of points
     x = np.linspace(0, num_cols-1, num_cols)
@@ -147,6 +147,7 @@ def stop_video(data):
     if is_recording_video:
         is_recording_video = False
         data.add_annotation('stopped video recording')
+
 
 if __name__ == '__main__':
 
@@ -273,7 +274,7 @@ if __name__ == '__main__':
             break
         time.sleep(0.1)
 
-    if (video or one_video) and is_recording_video:  # if recording is on, stop the video
+    if (video or one_video) and is_recording_video:  # if recording is still on, stop the video
         stop_video(data)
 
     total_time = datetime.datetime.now() - start_time
