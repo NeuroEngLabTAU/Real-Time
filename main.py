@@ -165,8 +165,8 @@ if __name__ == '__main__':
 
     # if usage of video recording is desired:
     # takes about 20 seconds to connect to the webcam at the beginning
-    video = True  # if True video recording is controlled by the space bar for start and 'q' for stop
-    one_video = True  # starts the first video recording with the EMG recording,
+    video = False  # if True video recording is controlled by the space bar for start and 'q' for stop
+    one_video = False  # starts the first video recording with the EMG recording,
     # also can set only one_video to True if only one video of the whole EMG recording is desired
 
     if video or one_video:
