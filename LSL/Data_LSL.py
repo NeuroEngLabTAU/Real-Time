@@ -77,7 +77,7 @@ def stream_inlet(timeout: float, verbose: bool = True, stream_name: str = "Real-
     for stream in streams:
         print(f"Found stream: Name={stream.name()}, Type={stream.type()}")
         if stream.name() == stream_name and stream.type() == modality:
-            inlets = StreamInlet(stream)
+            inlet = StreamInlet(stream)
             break
 
     for stream in streams:
@@ -145,8 +145,8 @@ if __name__ == '__main__':
     outlet_stream.start()
 
     # This receives all LSL streams that are connected to the network defined in lsl_api.cfg (i.e. via `KnownPeers`)
-    timeout = 15   # Stop after `timeout` seconds
-    stream_inlet(timeout=timeout, verbose=True, stream_name="Real-time EMG data" , modality='EMG')
+    # timeout = 15   # Stop after `timeout` seconds
+    # stream_inlet(timeout=timeout, verbose=True, stream_name="Real-time EMG data" , modality='EMG')
 
     print("Done recording.")
 

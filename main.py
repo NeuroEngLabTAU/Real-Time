@@ -152,13 +152,13 @@ def stop_video(data):
 if __name__ == '__main__':
 
     # define the desired visualisation
-    viz_raw = False  # Aaron's real time raw data plotting
+    viz_raw = True  # Aaron's real time raw data plotting
     # viz_ica = False  # Bara's semi real-time ICA
     viz_ica_streaming = False  # streaming ICA signals with heatmaps
-    Electrodes_raw = True  # raw signal electrodes
+    Electrodes_raw = False  # raw signal electrodes
 
     ica_integration_time = 10  # seconds
-    stop_ica = False  # if True the ica will be calculated for all the recorded data (ica_integration_time will be ignored),
+    stop_ica = True  # if True the ica will be calculated for all the recorded data (ica_integration_time will be ignored),
     # until the button 'ICA converged!' is pressed, then the data will be plotted according to the unmixing matrix
     # that was calculated last (when the button 'ICA converged!' was pressed)
     window_secs = 10  # seconds
@@ -232,11 +232,11 @@ if __name__ == '__main__':
         start_video(data, cap)
 
 
-    filters = {'highpass': {'W': 30}, 'comb': {'W': 50}}
-
+    # filters = {'highpass': {'W': 30}, 'comb': {'W': 50}}
+    filters = None
     if viz_raw:
-        original_viz = Viz(data, window_secs=window_secs, plot_exg=True, plot_imu=True, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=10, ylim_exg=(-250, 250), ylim_acc=(-1.1, 1.1), max_points=None, max_timeout=15)
+        original_viz = Viz(data, window_secs=window_secs, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
+                  update_interval_ms=10, ylim_exg=(-1000, 1000), ylim_acc=(-1.1, 1.1), max_points=None, max_timeout=15)
 
         original_viz.start()
 
