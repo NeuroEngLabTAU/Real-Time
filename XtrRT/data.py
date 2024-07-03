@@ -376,6 +376,7 @@ class Data(Thread):
             if self.start_time is None:
                 self.start_time = datetime.fromtimestamp(records[0].unix_time_secs) + \
                                   timedelta(milliseconds=records[0].unix_time_ms)
+                print(f"Data collection began at {self.start_time}")
 
             if not self.has_data and (self.exg_data is not None or self.imu_data is not None):  # TODO: change or to and with IMU
                 self.has_data = True
