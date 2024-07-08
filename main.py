@@ -156,13 +156,13 @@ if __name__ == '__main__':
 
     if viz_raw:
         # raw_fig = plt.figure()
-        raw_streaming = Viz(data, window_secs=10, plot_exg=True, plot_imu=False, plot_ica=False, find_emg=False, filters=filters,
-                  update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15, filter_data=True)
+        raw_streaming = Viz(data, window_secs=10, plot_exg=True, plot_imu=True, plot_ica=False, find_emg=False, filters=filters,
+                  update_interval_ms=10, ylim_exg=(-250, 250), max_points=None, max_timeout=15)  # in old_viz there is also "filter_data"
         raw_viz = raw_streaming.start()
 
     if viz_spectogram:
         # spec_fig = plt.figure()
-        spec_streaming = Viz_spec(data, window_secs=10, plot_exg=True, plot_imu=False, plot_spectogram=True, find_emg=False, filters=filters,
+        spec_streaming = Viz_spec(data, window_secs=10, plot_exg=True, plot_spectogram=True, find_emg=False, filters=filters,
                   update_interval_ms=10, ylim_exg=(-350, 350), max_points=None, max_timeout=15, filter_data=False)
         spec_viz = spec_streaming.start()
     # if viz_ica:

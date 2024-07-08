@@ -1,26 +1,16 @@
 
-import sys
 import warnings
-import numpy as np
-from PIL import ImageGrab
 import sklearn.exceptions
-import scipy.signal as sig
-import matplotlib.pyplot as plt
 from sklearn.decomposition import FastICA
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import scipy.signal as sig
+from PIL import ImageGrab
+import numpy as np
+from scipy.signal import butter, lfilter, filtfilt, iirnotch #for filtering the data
+from matplotlib.widgets import Button #for button in funcanimator
 
-try:
-    # Requires https://github.com/xtrodesorg/XtrUtils.git
-    from XtrUtils.filterbank import Filterer
-except ModuleNotFoundError:
-    pass
-try:
-    # Requires https://github.com/xtrodesorg/XtrUtils.git
-    # Requires https://github.com/xtrodesorg/XtrViz.git
-    # Requires https://github.com/xtrodesorg/XtrEMG.git
-    from .viz_emg import plot_emg
-except ModuleNotFoundError:
-    pass
+import time
 
 from .data import Data, ConnectionTimeoutError
 
@@ -37,13 +27,14 @@ class Viz:
                  plot_imu: bool = True,
                  plot_ica: bool = True,
                  ylim_exg: tuple = (-100, 100),
-                 ylim_acc: tuple = (-1, 1),
-                 ylim_gyro: tuple = (-1000, 1000),
+                 ylim_imu: tuple = (-1, 1),
                  update_interval_ms: int = 200,
                  max_points: (int, None) = 1000,
                  max_timeout: (int, None) = 15,
                  find_emg: bool = False,
-                 filters: dict = None):
+                 filters: dict = None,
+                 filter_data: bool=False,
+                 figure=None,):
 
         assert plot_exg or plot_imu
 
@@ -53,13 +44,11 @@ class Viz:
         self.plot_ica = plot_ica if plot_ica and plot_exg else False
         self.window_secs = window_secs
         self.axes = None
-        self.figure = None
+        self.figure = figure
         self.ylim_exg = ylim_exg
-        self.ylim_acc = ylim_acc
-        self.ylim_gyro = ylim_gyro
+        self.ylim_imu = ylim_imu
         self.xdata = None
-        self.y_exg = None
-        self.y_imu = None
+        self.ydata = None
         self.lines = []
         self.bg = None
         self.last_exg_sample = 0
@@ -71,12 +60,8 @@ class Viz:
         self.filters = filters
         self._backend = None
         self._existing_patches = []
-
-        # Automatically disable filtering and EMG detection if relevant Xtr packages are not available
-        if 'XtrUtils.filterbank' not in sys.modules:
-            self.filters = None
-        if 'XtrRT.viz_emg' not in sys.modules:
-            self.find_emg = False
+        self.filter_data = filter_data
+        self.fs = None
 
         # Confirm initial data retrieval before continuing (or raise Error if timeout)
         while not (self.data.is_connected and self.data.has_data):
@@ -91,17 +76,20 @@ class Viz:
 
     def setup(self):
 
+        self.ylim_imu = self.ylim_imu if self.ylim_imu else self.ylim_imu
+        self.ylim_exg = self.ylim_exg if self.ylim_exg else self.ylim_exg
+
         # Get data
         n_exg_samples, n_exg_channels = self.data.exg_data.shape if self.plot_exg else (0, 0)  # TODO: can be None if imu data comes first
         n_imu_samples, n_imu_channels = self.data.imu_data.shape if self.plot_imu else (0, 0)  # TODO: can be None if exg data comes first
-        fs = self.data.fs_exg if self.plot_exg else self.data.fs_imu
+        self.fs = self.data.fs_exg if self.plot_exg else self.data.fs_imu
 
         # Make timestamp vector
         max_samples = max((n_imu_samples, n_exg_samples))
-        last_sec = max_samples / fs
-        ts_max = self.window_secs if max_samples <= self.window_secs*fs else last_sec
+        last_sec = max_samples / self.fs
+        ts_max = self.window_secs if max_samples <= self.window_secs*self.fs else last_sec
         ts_min = ts_max - self.window_secs
-        ts = np.arange(ts_min, ts_max, 1/fs)
+        ts = np.arange(ts_min, ts_max, 1/self.fs)
         if self.max_points is None:
             self.max_points = len(ts)
         else:
@@ -110,8 +98,7 @@ class Viz:
         #
         n_channels = n_exg_channels + n_imu_channels
         self.xdata = ts
-        self.y_exg = np.full((len(ts), n_exg_channels), np.nan)
-        self.y_imu = np.full((len(ts), n_imu_channels), np.nan)
+        self.ydata = np.full((len(ts), n_channels), np.nan)
 
         # For auto-maximization of figure
         screensize = ImageGrab.grab().size
@@ -119,7 +106,7 @@ class Viz:
         screensize_inches = [px*npx for npx in screensize]
 
         # Prepare plots
-        n_rows = n_exg_channels + 2*self.plot_imu
+        n_rows = n_exg_channels + 1*self.plot_imu
         n_cols = 2 if self.plot_ica else 1
         f, axs = plt.subplots(n_rows, n_cols, sharex=True, figsize=screensize_inches)
         axs = np.atleast_2d(axs).T if n_cols == 1 else axs
@@ -127,27 +114,21 @@ class Viz:
         for col in range(n_cols):
             for row in range(n_exg_channels):
                 ax = axs[row, col]
-                line, = ax.plot(self.xdata, self.y_exg[:, row], linewidth=0.5)
+                line, = ax.plot(self.xdata, self.ydata[:, row], linewidth=0.5)
                 ax.set_ylim((-1, 1)) if col == 1 else axs[row, col].set_ylim(self.ylim_exg)
                 self.lines.append(line)
                 ax.set_ylabel(f"{'IC' if col == 1 else 'col'} {row+1 if col == 1 else row}", fontsize=11-np.sqrt(n_rows))
                 ax.xaxis.set_ticklabels([])
-            for n, ch in enumerate(range(n_imu_channels)[:3]):
-                line, = axs[-2, col].plot(self.xdata, self.y_imu[:, n], linewidth=0.5)
+            for n, ch in enumerate(range(n_imu_channels)):
+                line, = axs[-1, col].plot(self.xdata, self.ydata[:, n_exg_channels + n], linewidth=0.5)
                 self.lines.append(line)
-                axs[-2, col].set_ylabel("Acc", fontsize=11-np.sqrt(n_rows)) if col == 0 else None
-                axs[-2, col].set_ylim(*self.ylim_acc)
-            for n, ch in enumerate(range(n_imu_channels)[3:]):
-                line, = axs[-1, col].plot(self.xdata, self.y_imu[:, n + 3], linewidth=0.5)
-                self.lines.append(line)
-                axs[-1, col].set_ylabel("Gyro", fontsize=11-np.sqrt(n_rows)) if col == 0 else None
-                axs[-1, col].set_ylim(*self.ylim_gyro)
+                axs[-1, col].set_ylabel("IMU") if col == 0 else None
+                axs[-1, col].set_ylim(*self.ylim_imu)
         axs[0, 0].set_xlim((ts[0], ts[-1]))
         [axs[row, col].spines['bottom'].set_visible(False) for row in range(n_rows-1) for col in range(n_cols)]
         [axs[row, col].spines['top'].set_visible(False) for row in range(1, n_rows) for col in range(n_cols)]
         axs[0, 0].set_title("Raw data")
         axs[0, 1].set_title("ICA") if self.plot_ica else None
-        f.align_ylabels()
         # self._timer = axs[-1, -1].text(1, 0.05, "", transform=axs[-1, -1].transAxes, ha="right", size=9)
 
         for ax in axs[-1, :]:
@@ -155,7 +136,7 @@ class Viz:
                            which='both',      # both major and minor ticks are affected
                            bottom=False,      # ticks along the bottom edge are off
                            top=False,         # ticks along the top edge are off
-                           labelbottom=True)  # labels along the bottom edge are on
+                           labelbottom=True)  # labels along the bottom edge are off
 
         self.axes = axs
         self.figure = f
@@ -195,27 +176,11 @@ class Viz:
     @staticmethod
     def _correct_matrix(matrix, desired_samples):
 
-        if not len(matrix):
-            return matrix
-
         if matrix.shape[0] < desired_samples:
             n_to_pad = desired_samples - matrix.shape[0]
             matrix = np.pad(matrix.astype(float), ((0, n_to_pad), (0, 0)), mode='constant', constant_values=np.nan)
 
         return matrix
-
-    @staticmethod
-    def _remove_trailing_nan(matrix: np.ndarray):
-
-        last_valid = len(matrix)
-        for n, row in enumerate(matrix[::-1]):
-            if all(np.isnan(row)):
-                print(n)
-                last_valid = last_valid - 1
-            else:
-                break
-
-        return matrix[:last_valid]
 
     @staticmethod
     def _crop(matrix, desired_samples):
@@ -234,13 +199,13 @@ class Viz:
             new_data_exg = data.exg_data[self.last_exg_sample:, :]
             self.last_exg_sample = n_exg_samples
         else:
-            new_data_exg = np.array([])
+            new_data_exg = []
         if self.plot_imu and data.imu_data is not None:
             n_imu_samples, n_imu_channels = data.imu_data.shape
             new_data_imu = data.imu_data[self.last_imu_sample:, :]
             self.last_imu_sample = n_imu_samples
         else:
-            new_data_imu = np.array([])
+            new_data_imu = []
 
         if self.plot_exg and self.plot_imu:
             q = data.fs_imu / data.fs_exg
@@ -256,15 +221,9 @@ class Viz:
             raise RuntimeError
 
         # Get old data
-        old_data_exg = np.full((0, n_exg_channels), np.nan) if self.y_exg is None else self.y_exg
-        old_data_imu = np.full((0, n_imu_channels), np.nan) if self.y_imu is None else self.y_imu
+        old_data_exg = np.full((0, n_exg_channels), np.nan) if self.ydata is None else self.ydata[:, :n_exg_channels]
+        old_data_imu = np.full((0, n_imu_channels), np.nan) if self.ydata is None else self.ydata[:, n_exg_channels:]
 
-        # # Remove any trailing nan samples from existing data that may have been artificially placed during
-        # # _correct_matrix to adjust for inconsistent number of samples across modalities:
-        # old_data_exg = Viz._remove_trailing_nan(old_data_exg)
-        # old_data_imu = Viz._remove_trailing_nan(old_data_imu)
-
-        # Combine old and new samples
         data_exg = np.vstack((old_data_exg, new_data_exg)) if old_data_exg.size else new_data_exg
         data_imu = np.vstack((old_data_imu, new_data_imu)) if old_data_imu.size else new_data_imu
 
@@ -289,12 +248,6 @@ class Viz:
         desired_samples = int(self.window_secs * fs)
         all_data = Viz._correct_matrix(all_data, desired_samples)
         all_data, n_samples_cropped = Viz._crop(all_data, desired_samples)
-        data_exg = Viz._correct_matrix(data_exg, desired_samples)
-        data_exg, n_samples_exg = Viz._crop(data_exg, desired_samples)
-        data_imu = Viz._correct_matrix(data_imu, desired_samples)
-        data_imu, n_samples_imu = Viz._crop(data_imu, desired_samples)
-        if self.plot_exg and self.plot_imu and n_samples_exg != n_samples_imu:
-            print('debug')
 
         if self.xdata is None:
             max_samples = max((n_imu_samples, n_exg_samples))
@@ -304,8 +257,7 @@ class Viz:
             self.xdata = np.arange(ts_min, ts_max, 1/fs)
 
         self.xdata += n_samples_cropped / fs
-        self.y_exg = data_exg
-        self.y_imu = data_imu
+        self.ydata = all_data
 
     @staticmethod
     def _format_time(time):
@@ -340,19 +292,6 @@ class Viz:
         non_nan_idc_downsampled = np.array([int(i * n_pts / data.shape[0]) for i in
                                             non_nan_idc[np.array([int(np.round(idx)) for idx in
                                                                   np.linspace(0, len(non_nan_idc) - 1, num=n_pts_resample)])]])
-        duplicates = [name for name, count in zip(*np.unique(non_nan_idc_downsampled, return_counts=True)) if count > 1]
-        idc_to_add = []
-        for duplicate in duplicates:
-            while True:
-                if duplicate in non_nan_idc_downsampled:
-                    duplicate += 1
-                elif duplicate >= n_pts:
-                    break
-                else:
-                    idc_to_add.append(duplicate)
-                    break
-                    # duplicates = duplicates[1:] if any(duplicates) else []
-        non_nan_idc_downsampled = np.sort(np.hstack((np.unique(non_nan_idc_downsampled), idc_to_add))).astype(np.int32)
 
         # To avoid inserting at index n_pts, shift all indices after the last nan down by 1
         if n_pts in non_nan_idc_downsampled:
@@ -364,6 +303,31 @@ class Viz:
 
         return out
 
+
+    def filter_raw(self, y):
+        # normalise cut-off frequencies to sampling frequency
+        high_band = 35 / (self.fs / 2)
+        low_band = 124 / (self.fs / 2)
+
+        # create bandpass filter for EMG
+        b1, a1 = butter(4, [high_band, low_band], btype='bandpass')
+
+        # process EMG signal: filter EMG
+        filtered_y = np.zeros(y.shape)
+        for i in range(16):
+            filtered_y[:, i] = filtfilt(b1, a1, y[:, i])
+
+        # Design a notch filter to remove the 50 Hz power line interference
+        f0 = 50  # Center frequency (Hz)
+        Q = 30  # Quality factor
+        w0 = f0 / (self.fs / 2)  # Normalized frequency
+        b, a = iirnotch(w0, Q)
+
+        # Apply the notch filter to the signal
+        filtered_y = filtfilt(b, a, filtered_y)
+
+        return filtered_y
+
     def update(self, *args, **kwargs):
 
         self._update_data(self.data)
@@ -373,28 +337,21 @@ class Viz:
         q = int(len(self.xdata)/self.max_points)
         n_pts = int(len(self.xdata) / q)
         x = sig.decimate(self.xdata, q)
-        y_exg = Viz._nandecimate(self.y_exg, n_pts)
-        y_imu = Viz._nandecimate(self.y_imu, n_pts)
+        ynotnan = ~np.all(np.isnan(self.ydata), axis=1)
+        y = self.ydata[ynotnan, :]
+        y = y if np.any(np.isnan(y)) else sig.resample(y, n_pts, axis=0)
 
-        # Filter EXG (if relevant)
-        if self.plot_exg and self.filters is not None:
-            try:
-                y_exg_plt = Filterer.filter_data(y_exg, self.filters, self.data.fs_exg, verbose=False)
-            except (ValueError, IndexError) as e:
-                breakpoint()
-                y_exg_plt = y_exg
+        if (self.filter_data == True):
+            viz_y = self.filter_raw(y)
         else:
-            y_exg_plt = y_exg
+            viz_y = y
 
-        # Add trailing nans if EXG and IMU contain different number of samples
-        desired_samples = max(len(y_exg_plt), len(y_imu))
-        y_exg_plt = Viz._correct_matrix(y_exg_plt, desired_samples)
-        y_imu = Viz._correct_matrix(y_imu, desired_samples)
+        #print(np.nanmax(viz_y))
 
-        y_plt = np.hstack((y_exg_plt, y_imu)) if len(y_exg_plt) and len(y_imu) else y_exg_plt if len(y_exg_plt) else y_imu
         for n in range(n_exg_channels + n_imu_channels):
-            self.lines[n].set_data(x, y_plt[:, n])
-            self.lines[n].set_data(x, y_plt[:, n])
+            # filt = Filterer.filter_data(y[:, n], self.filters, self.data.fs_exg, verbose=False)
+            # self.lines[n].set_data(x, filt)
+            self.lines[n].set_data(x, viz_y[:, n])
         self.axes[-1, -1].set_xlim((x[0], x[-1]))
 
         # Time of last update (must be inside axes for blit to work)
@@ -409,27 +366,26 @@ class Viz:
 
         # EMG detection (if relevant)
         if self.find_emg:
-            patch_artists = plot_emg(self.axes[:n_exg_channels], x, y_plt, self.data.fs_exg)
+            from viz_emg import plot_emg
+            patch_artists = plot_emg(self.axes[:n_exg_channels], x, y, self.data.fs_exg)
             # self._existing_patches = patch_artists
         else:
             patch_artists = []
 
         # Plot ICA (if relevant)
         if self.plot_ica:
-            non_nan_idc = np.where(~np.all(np.isnan(self.y_exg), axis=1))[0]
-            y = self.y_exg[non_nan_idc]
+            non_nan_idc = np.where(~np.all(np.isnan(self.ydata[:, :n_exg_channels]), axis=1))[0]
+            y = self.ydata[non_nan_idc, :n_exg_channels]
             if min(y.shape) == n_exg_channels:
                 solver = "eigh" if y.shape[0] >= 50*y.shape[1] else "svd"
                 ica = FastICA(whiten_solver=solver)
                 ics_nonan = ica.fit_transform(y[:, :n_exg_channels])
-                ics = np.full_like(self.y_exg, np.nan)
+                ics = np.full_like(self.ydata[:, :n_exg_channels], np.nan)
                 ics[non_nan_idc, :] = ics_nonan
                 ics_decim = Viz._nandecimate(ics, n_pts)
                 # ics = sig.resample(ics, n_pts, axis=0)
                 for n in range(n_exg_channels):
                     self.lines[n_exg_channels + n_imu_channels + n].set_data(x, ics_decim[:, n])
-                for n in range(n_imu_channels):
-                    self.lines[n_exg_channels * 2 + n_imu_channels + n].set_data(x, y_imu[:, n])
             else:
                 pass
 
@@ -444,37 +400,59 @@ class Viz:
         import matplotlib.dates as mdates
         myFmt = mdates.DateFormatter('%H:%M:%S')
         [ax.xaxis.set_major_formatter(myFmt) for ax in self.axes[-1, :]]
-        [ax.tick_params(axis="x", direction="in", pad=-15, size=9) for ax in self.axes[-1, :]]
+        [ax.tick_params(
+            axis="x", direction="in", pad=-15, size=9) for ax in self.axes[-1, :]]
         [ax.axes.xaxis.set_ticklabels([]) for ax in self.axes[-1, :]]
+
+        # if self._backend == 'module://mplopengl.backend_qtgl':
+        #     plt.draw()
+        # else:
+        #     # [ax.draw_artist(line) for ax, line in zip(self.axes, self.lines)]
+        #     [self.figure.canvas.restore_region(bg) for bg in self.bg]
+        #     self.figure.canvas.blit(self.figure.bbox)
+        #     self.figure.canvas.flush_events()
 
         # Gather artists (necessary if using FuncAnimation)
         lines_artists = self.lines
         xtick_artists = []
         for ax in self.axes[-1, :]:
             for artist in ax.get_xticklabels():
-                # ax.set_xticklabels([time_left]*len(ax.get_xticks()))  # NOTE: fails to clear first update from canvas
                 artist.axes = ax
                 xtick_artists.append(artist)
-
+        # xtick_artists = [artist for ax in self.axes[-1, :] for artist in ax.get_xticklabels()]
         artists = lines_artists + time_txt_artists + xtick_artists + patch_artists
 
         return artists
-
-    def init_func(self):
-
-        for ax in self.axes:
-            ax.clear()
-            # ax.set_ylabel()
-
-        return self.axes
 
     def close(self, _):
         self.data.is_connected = False
         print('Window closed.')
 
+        # to start the animation
+
+    # def start_animation(self, event):
+    #     self.animation.event_source.start()
+    #
+    #     # to stop the animation
+    #
+    # def stop_animation(self, event):
+    #     self.animation.event_source.stop()
+
     def start(self):
 
         from matplotlib.animation import FuncAnimation
-        animation = FuncAnimation(self.figure, self.update,# init_func=self.init_func,
+        self.animation = FuncAnimation(self.figure, self.update,
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
-        plt.show()
+
+
+        # # Create start and stop buttons
+        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
+        # button_start = Button(ax_start, 'Start')
+        # button_start.on_clicked(self.start_animation)
+        #
+        # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
+        # button_stop = Button(ax_stop, 'Stop')
+        # button_stop.on_clicked(self.stop_animation)
+
+
+        # plt.show()

@@ -24,10 +24,8 @@ class Viz_spec:
                  data: Data,
                  window_secs: float = 10,
                  plot_exg: bool = True,
-                 plot_imu: bool = True,
                  plot_spectogram: bool = True,
                  ylim_exg: tuple = (-350, 350),
-                 ylim_imu: tuple = (-1, 1),
                  update_interval_ms: int = 200,
                  max_points: (int, None) = 1000,
                  max_timeout: (int, None) = 15,
@@ -36,23 +34,20 @@ class Viz_spec:
                  filter_data: bool=False,
                  figure=None, ):
 
-        assert plot_exg or plot_imu
+        assert plot_exg
 
         self.data = data
         self.plot_exg = plot_exg
-        self.plot_imu = plot_imu
         self.plot_spectogram = plot_spectogram if plot_spectogram and plot_exg else False
         self.window_secs = window_secs
         self.axes = None
         self.figure = figure
         self.ylim_exg = ylim_exg
-        self.ylim_imu = ylim_imu
         self.xdata = None
         self.ydata = None
         self.lines = []
         self.bg = None
         self.last_exg_sample = 0
-        self.last_imu_sample = 0
         self.init_time = datetime.now()
         self.update_interval_ms = update_interval_ms
         self.max_points = max_points
@@ -76,16 +71,14 @@ class Viz_spec:
 
     def setup(self):
 
-        self.ylim_imu = self.ylim_imu if self.ylim_imu else self.ylim_imu
         self.ylim_exg = self.ylim_exg if self.ylim_exg else self.ylim_exg
 
         # Get data
         n_exg_samples, n_exg_channels = self.data.exg_data.shape if self.plot_exg else (0, 0)  # TODO: can be None if imu data comes first
-        n_imu_samples, n_imu_channels = self.data.imu_data.shape if self.plot_imu else (0, 0)  # TODO: can be None if exg data comes first
-        self.fs = self.data.fs_exg if self.plot_exg else self.data.fs_imu
+        self.fs = self.data.fs_exg
 
         # Make timestamp vector
-        max_samples = max((n_imu_samples, n_exg_samples))
+        max_samples = n_exg_samples
         last_sec = max_samples / self.fs
         ts_max = self.window_secs if max_samples <= self.window_secs*self.fs else last_sec
         ts_min = ts_max - self.window_secs
@@ -96,7 +89,7 @@ class Viz_spec:
             ts = Viz_spec._downsample_monotonic(ts, n_pts=self.max_points)
 
         #
-        n_channels = n_exg_channels + n_imu_channels
+        n_channels = n_exg_channels
         self.xdata = ts
         self.ydata = np.full((len(ts), n_channels), np.nan)
 
@@ -106,7 +99,7 @@ class Viz_spec:
         screensize_inches = [px*npx for npx in screensize]
 
         # Prepare plots
-        n_rows = n_exg_channels + 1*self.plot_imu
+        n_rows = n_exg_channels
         n_cols = 2 if self.plot_spectogram else 1
         f, axs = plt.subplots(n_rows, n_cols, sharex=False, figsize=screensize_inches)
         axs = np.atleast_2d(axs).T if n_cols == 1 else axs
@@ -117,18 +110,14 @@ class Viz_spec:
                 line, = ax.plot(self.xdata, self.ydata[:, row], linewidth=0.5)
                 ax.set_ylim((-1, 1)) if col == 1 else axs[row, col].set_ylim(self.ylim_exg)
                 self.lines.append(line)
-                ax.set_ylabel(f"{'IC' if col == 1 else 'col'} {row+1 if col == 1 else row}", fontsize=11-np.sqrt(n_rows))
-                ax.xaxis.set_ticklabels([])
-            for n, ch in enumerate(range(n_imu_channels)):
-                line, = axs[-1, col].plot(self.xdata, self.ydata[:, n_exg_channels + n], linewidth=0.5)
-                self.lines.append(line)
-                axs[-1, col].set_ylabel("IMU") if col == 0 else None
-                axs[-1, col].set_ylim(*self.ylim_imu)
+                ax.set_ylabel(f"{'channell'} {row+1}", fontsize=11-np.sqrt(n_rows))
+                if col==0:
+                    ax.xaxis.set_ticklabels([])
         axs[0, 0].set_xlim((ts[0], ts[-1]))
         [axs[row, col].spines['bottom'].set_visible(False) for row in range(n_rows-1) for col in range(n_cols)]
         [axs[row, col].spines['top'].set_visible(False) for row in range(1, n_rows) for col in range(n_cols)]
         axs[0, 0].set_title("Raw data")
-        axs[0, 1].set_title("ICA") if self.plot_spectogram else None
+        axs[0, 1].set_title("Spectogram") if self.plot_spectogram else None
         # self._timer = axs[-1, -1].text(1, 0.05, "", transform=axs[-1, -1].transAxes, ha="right", size=9)
 
         for ax in axs[-1, :]:
@@ -136,7 +125,7 @@ class Viz_spec:
                            which='both',      # both major and minor ticks are affected
                            bottom=False,      # ticks along the bottom edge are off
                            top=False,         # ticks along the top edge are off
-                           labelbottom=True)  # labels along the bottom edge are off
+                           labelbottom=True)  # labels along the bottom edge are on
 
         self.axes = axs
         self.figure = f
@@ -200,47 +189,26 @@ class Viz_spec:
             self.last_exg_sample = n_exg_samples
         else:
             new_data_exg = []
-        if self.plot_imu and data.imu_data is not None:
-            n_imu_samples, n_imu_channels = data.imu_data.shape
-            new_data_imu = data.imu_data[self.last_imu_sample:, :]
-            self.last_imu_sample = n_imu_samples
-        else:
-            new_data_imu = []
 
-        if self.plot_exg and self.plot_imu:
-            q = data.fs_imu / data.fs_exg
-            assert q - int(q) == 0
-            q = int(q)
-            new_data_imu = sig.resample_poly(new_data_imu, up=1, down=q)
+
+
+        if self.plot_exg:
             fs = data.fs_exg
-        elif self.plot_exg:
-            fs = data.fs_exg
-        elif self.plot_imu:
-            fs = data.fs_imu
+
         else:
             raise RuntimeError
 
         # Get old data
         old_data_exg = np.full((0, n_exg_channels), np.nan) if self.ydata is None else self.ydata[:, :n_exg_channels]
-        old_data_imu = np.full((0, n_imu_channels), np.nan) if self.ydata is None else self.ydata[:, n_exg_channels:]
 
         data_exg = np.vstack((old_data_exg, new_data_exg)) if old_data_exg.size else new_data_exg
-        data_imu = np.vstack((old_data_imu, new_data_imu)) if old_data_imu.size else new_data_imu
 
-        if self.plot_exg and self.plot_imu:
-            # Make full matrices same size and concatenate
-            max_len = max(data_exg.shape[0], data_imu.shape[0])
-            data_exg = Viz_spec._correct_matrix(data_exg, max_len)
-            data_imu = Viz_spec._correct_matrix(data_imu, max_len)
-            all_data = np.hstack((data_exg, data_imu))
 
-        elif self.plot_exg:
+        if self.plot_exg:
             data_exg = Viz_spec._correct_matrix(data_exg, data_exg.shape[0])
             all_data = data_exg
 
-        elif self.plot_imu:
-            data_imu = Viz_spec._correct_matrix(data_imu, data_imu.shape[0])
-            all_data = data_imu
+
         else:
             raise RuntimeError
 
@@ -250,7 +218,7 @@ class Viz_spec:
         all_data, n_samples_cropped = Viz_spec._crop(all_data, desired_samples)
 
         if self.xdata is None:
-            max_samples = max((n_imu_samples, n_exg_samples))
+            max_samples = n_exg_samples
             last_sec = max_samples / fs
             ts_max = self.window_secs if max_samples <= self.window_secs * fs else last_sec
             ts_min = ts_max - self.window_secs
@@ -333,7 +301,6 @@ class Viz_spec:
         self._update_data(self.data)
 
         n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
-        n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
         q = int(len(self.xdata)/self.max_points)
         n_pts = int(len(self.xdata) / q)
         x = sig.decimate(self.xdata, q)
@@ -346,7 +313,7 @@ class Viz_spec:
         # else:
         viz_y = y
 
-        for n in range(n_exg_channels + n_imu_channels):
+        for n in range(n_exg_channels):
             self.lines[n].set_data(x, viz_y[:, n])
             self.axes[n, 0].set_xlim((x[0], x[-1]))  # Set xlim for time-domain plot
 
@@ -374,14 +341,17 @@ class Viz_spec:
                 # Update the frequency-domain plot
                 self.lines[n_exg_channels + n].set_data(positive_frequencies, positive_magnitude)
                 self.axes[n, 1].set_xlim(0, self.data.fs_exg / 2)  # Set xlim for frequency-domain plot
-                # self.axes[n, 0].set_xlim((x[0], x[-1]))  # Set xlim for time-domain plot
-                self.axes[n, 1].set_ylim(0, np.max(positive_magnitude))
-                self.axes[n, 1].set_ylabel(f'Channel {n + 1}')
+                self.axes[n, 1].set_ylim(-2000, 70000)  # Set ylim for frequency-domain plot - constant in order to see al the channels on the same scale
+                # self.axes[n, 1].set_ylabel(f'Channel {n + 1}')
                 if n == n_exg_channels - 1:
                     self.axes[n, 1].set_xlabel('Frequency [Hz]')
                 if n == 0:
                     self.axes[n, 1].set_title('Frequency Domain')
 
+                # Set x-ticks at every 25 Hz
+                freq_ticks = np.arange(0, self.data.fs_exg / 2, 25)
+                self.axes[n, 1].set_xticks(freq_ticks)
+                self.axes[n, 1].set_xticklabels([str(int(tick)) for tick in freq_ticks])
 
         # Time of last update (must be inside axes for blit to work)
         duration = datetime.now() - self.init_time
@@ -391,14 +361,14 @@ class Viz_spec:
         time_txt_artists = []
         for ax in self.axes[-1, :]:
             time_txt_artists.append(ax.text(0, 0.05, time_left, transform=ax.transAxes, ha="left", size=9))
-            time_txt_artists.append(ax.text(0, 0.05, time_right, transform=ax.transAxes, ha="right", size=9))
+            time_txt_artists.append(ax.text(0, 0.2, time_right, transform=ax.transAxes, ha="right", size=9))
 
-        import matplotlib.dates as mdates
-        myFmt = mdates.DateFormatter('%H:%M:%S')
-        [ax.xaxis.set_major_formatter(myFmt) for ax in self.axes[-1, :]]
-        [ax.tick_params(
-            axis="x", direction="in", pad=-15, size=9) for ax in self.axes[-1, :]]
-        [ax.axes.xaxis.set_ticklabels([]) for ax in self.axes[-1, :]]
+        # import matplotlib.dates as mdates
+        # myFmt = mdates.DateFormatter('%H:%M:%S')
+        # [ax.xaxis.set_major_formatter(myFmt) for ax in self.axes[-1, :]]
+        # [ax.tick_params(
+        #     axis="x", direction="in", pad=-15, size=9) for ax in self.axes[-1, :]]
+        # [ax.axes.xaxis.set_ticklabels([]) for ax in self.axes[-1, :]]
 
 
         # Gather artists (necessary if using FuncAnimation)
@@ -417,15 +387,6 @@ class Viz_spec:
         self.data.is_connected = False
         print('Window closed.')
 
-        # to start the animation
-
-    # def start_animation(self, event):
-    #     self.animation.event_source.start()
-    #
-    #     # to stop the animation
-    #
-    # def stop_animation(self, event):
-    #     self.animation.event_source.stop()
 
     def start(self):
 
@@ -434,110 +395,9 @@ class Viz_spec:
                                   blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
 
 
-        # # Create start and stop buttons
-        # ax_start = plt.axes([0.05, 0.01, 0.05, 0.025])
-        # button_start = Button(ax_start, 'Start')
-        # button_start.on_clicked(self.start_animation)
-        #
-        # ax_stop = plt.axes([0.11, 0.01, 0.05, 0.025])
-        # button_stop = Button(ax_stop, 'Stop')
-        # button_stop.on_clicked(self.stop_animation)
-
 
         # plt.show()
 
 
 
 
-
-
-# import numpy as np
-# import matplotlib.pyplot as plt
-# from matplotlib.animation import FuncAnimation
-# from scipy.signal import get_window
-#
-# # Parameters
-# fs = 500  # Sampling frequency
-# window_size = int(0.5 * fs)  # Window size: 500 ms
-# update_interval = int(0.1 * fs)  # Update interval: 100 ms
-# duration = 10  # Duration of the signal in seconds
-# t = 0  # initiate the time vector to construct the signal
-# points_per_frame = 10  # Number of data points to add per frame
-# num_channels = 4  # Number of channels
-#
-# # Initialize the plot
-# fig, axs = plt.subplots(num_channels, 2, figsize=(12, 8), sharex='col')
-#
-# # Initialize time-domain lines and frequency-domain lines for each channel
-# lines_time = []
-# lines_freq = []
-# for i in range(num_channels):
-#     # Time-domain plot
-#     line1, = axs[i, 0].plot([], [], lw=2)
-#     axs[i, 0].set_ylim(-6, 6)
-#     axs[i, 0].set_ylabel(f'Channel {i+1}\nAmplitude')
-#
-#     # Frequency-domain plot
-#     line2, = axs[i, 1].plot([], [], lw=2)
-#     axs[i, 1].set_xlim(0, fs/2)
-#     axs[i, 1].set_ylim(0, 80)
-#     axs[i, 1].set_ylabel('Magnitude')
-#
-#     lines_time.append(line1)
-#     lines_freq.append(line2)
-#
-# # Initialize the data for real-time signals
-# real_time_signals = [np.zeros(window_size) for _ in range(num_channels)]
-# time_vector = np.linspace(0, window_size / fs, window_size)
-#
-# def init():
-#     for line1, line2 in zip(lines_time, lines_freq):
-#         line1.set_data([], [])
-#         line2.set_data([], [])
-#     return lines_time + lines_freq
-#
-# def update(frame):
-#     global real_time_signals, time_vector, t
-#
-#     t += points_per_frame
-#     vec_to_add = np.linspace(t, t + points_per_frame-1, points_per_frame) / fs
-#     current_time = (t * points_per_frame) / fs
-#     time_vector = np.linspace(current_time - window_size / fs, current_time, window_size)
-#
-#     for i in range(num_channels):
-#         # Simulate real-time signal generation by adding multiple points per frame
-#         new_points = (
-#                 np.sin(2 * np.pi * 50 * vec_to_add)
-#                 + np.sin(2 * np.pi * 120 * vec_to_add)
-#                 + np.sin(np.random.normal(0, 20) * np.pi * vec_to_add)  # add random frequency of sine wave
-#                 + np.random.normal(0, 0.5, points_per_frame)  # add random noise
-#                       )
-#         real_time_signals[i] = np.roll(real_time_signals[i], -points_per_frame)
-#         real_time_signals[i][-points_per_frame:] = new_points
-#
-#         # Update the time vector for the time-domain plot
-#         lines_time[i].set_data(time_vector, real_time_signals[i])
-#         axs[i, 0].set_xlim(time_vector[0], time_vector[-1])
-#
-#         # Apply window function to the segment
-#         window_function = get_window('hann', window_size)
-#         windowed_segment = real_time_signals[i] * window_function
-#
-#         # Compute the FFT of the windowed segment
-#         fft_result = np.fft.fft(windowed_segment)
-#         fft_magnitude = np.abs(fft_result)
-#         frequencies = np.fft.fftfreq(len(fft_magnitude), 1/fs)
-#
-#         # Only take the positive frequencies and corresponding magnitudes
-#         positive_frequencies = frequencies[:len(frequencies)//2]
-#         positive_magnitude = fft_magnitude[:len(fft_magnitude)//2]
-#
-#         # Update the frequency-domain plot
-#         lines_freq[i].set_data(positive_frequencies, positive_magnitude)
-#
-#     return lines_time + lines_freq
-#
-# # Create animation
-# ani = FuncAnimation(fig, update, frames=np.arange(0, duration*fs, update_interval // points_per_frame), init_func=init, blit=True, interval=100)
-# plt.tight_layout()
-# plt.show()
