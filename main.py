@@ -141,7 +141,7 @@ if __name__ == '__main__':
         # Define the video writer object
         fourcc = cv2.VideoWriter_fourcc(*"XVID")
         output_filename = ""
-        is_recording_video = False
+        is_recording_video = threading.Event()
 
 
     if viz_ica_streaming or Electrodes_raw:
@@ -182,8 +182,6 @@ if __name__ == '__main__':
     while not data.has_data:  # Wait to start collecting data before doing anything
         continue
 
-    # start_time = datetime.datetime.now()
-    # print('started data recording at: ', start_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
     data.add_annotation("Start recording")
 
     if video:
@@ -192,7 +190,7 @@ if __name__ == '__main__':
         keyboard.on_press_key("q", lambda _: stop_video(data))
 
     if one_video:
-        start_video(data, cap)
+        start_video(cap, is_recording_video, fourcc, output_filename)
 
 
     filters = {'highpass': {'W': 30}, 'comb': {'W': 50}}
@@ -244,12 +242,8 @@ if __name__ == '__main__':
         time.sleep(0.1)
 
     if (video or one_video) and is_recording_video:  # if recording is still on, stop the video
-        stop_video(data)
+        stop_video(is_recording_video)
 
-    # total_time = datetime.datetime.now() - start_time
-    # data.add_annotation("Stop recording at " + f"{int(total_time.total_seconds() // 60):02d}:"
-    #                                            f"{int(total_time.total_seconds() % 60):02d}."
-    #                                            f"{total_time.microseconds // 1000:03d}")
     data.add_annotation("data.start_time: " + str(data.start_time))
     data.add_annotation("Stop recording")
     data.stop()

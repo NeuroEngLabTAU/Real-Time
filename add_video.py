@@ -1,21 +1,20 @@
+import threading
 import cv2
 import datetime
-import threading
 import os
 
-# function for video recording
-def record_video(webcam, fourcc, is_recording_video, saving_path):
-
+# Function for video recording
+def record_video(webcam, fourcc, stop_event, saving_path):
     # Get the current time including milliseconds
     recording_start_time = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S-%f")[:-3]
-    output_filename = os.path.join(saving_path,f"video_{recording_start_time}.avi")
+    output_filename = os.path.join(saving_path, f"video_{recording_start_time}.avi")
     print(f"Video recording started at {recording_start_time} ...")
 
     # Define the video writer object
     out = cv2.VideoWriter(output_filename, fourcc, 30.0, (640, 480))
 
-    # Start recording until user interrupts or is_recording is False
-    while is_recording_video:
+    # Start recording until the stop event is set
+    while not stop_event.is_set():
         ret, frame = webcam.read()  # Read frame from webcam
 
         if ret:
@@ -31,25 +30,18 @@ def record_video(webcam, fourcc, is_recording_video, saving_path):
     out.release()
 
 
-# functions to control video recording
-def start_video(cap, is_recording_video, fourcc, saving_path):
-    # global is_recording_video
-    fourcc = fourcc
-    if not is_recording_video:
-        is_recording_video = True
-        record_thread = threading.Thread(target=record_video, args=(cap, fourcc, is_recording_video, saving_path))
+# Functions to control video recording
+def start_video(cap, stop_event, fourcc, saving_path):
+    if not stop_event.is_set():
+        stop_event.clear()  # Ensure the stop event is clear
+        record_thread = threading.Thread(target=record_video, args=(cap, fourcc, stop_event, saving_path))
         record_thread.start()
-        # data.add_annotation('started video recording')
-        print(is_recording_video)
-    return is_recording_video
+        print("Recording started")
 
 
-def stop_video(is_recording_video):
+def stop_video(stop_event):
     print("entered stop_video")
-    # global is_recording_video
-    if is_recording_video:
-        print("entered if")
-        is_recording_video = False
-        print(is_recording_video)
-        # data.add_annotation('stopped video recording')
+    if not stop_event.is_set():
+        stop_event.set()  # Signal the recording thread to stop
+        print("Recording stopped")
 
