@@ -306,9 +306,11 @@ class Data(Thread):
         if record.record_type == "EXG":
             fs = self.fs_exg
             current_packet_idx, current_packet_len = self._current_packet_exg
-        else:
+        elif record.record_type == "IMU":
             fs = self.fs_imu
             current_packet_idx, current_packet_len = self._current_packet_imu
+        else:
+            return
 
         # Account for packet index reset after 2**16
         record_packet_idx = record.packet_idx
