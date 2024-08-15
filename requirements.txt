@@ -1,0 +1,11 @@
+matplotlib
+numpy<2
+opencv-python
+Pillow
+PyQt5
+pyedflib
+scikit-learn
+scipy
+python-picard
+keyboard
+pandas
