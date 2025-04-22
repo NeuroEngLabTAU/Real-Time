@@ -1,24 +1,17 @@
 import warnings
-
-import sklearn.exceptions
-from sklearn.decomposition import FastICA
 from datetime import datetime, timedelta
+
 import matplotlib.pyplot as plt
-import scipy.signal as sig
-from PIL import ImageGrab
 import numpy as np
+import scipy.signal as sig
+import sklearn.exceptions
 from matplotlib.animation import FuncAnimation
-import matplotlib.dates as mdates
-from .data import Data, ConnectionTimeoutError
-from random import randrange
-from scipy.signal import butter, lfilter, filtfilt, iirnotch #for filtering the data
-from matplotlib.widgets import Button, TextBox #for button in funcanimator
+from scipy.signal import butter, filtfilt, iirnotch  # for filtering the data
+
+from XtrRT.data import Data, ConnectionTimeoutError
 
 warnings.filterwarnings("ignore", category=sklearn.exceptions.ConvergenceWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-
-import time
-
 
 from matplotlib.patches import Circle  # for marking the electrodes on the image
 
@@ -30,85 +23,62 @@ class Electrodes_Raw_Streaming:
                  window_secs: float = 10,
                  plot_exg: bool = True,
                  plot_imu: bool = True,
-                 plot_ica: bool = True,
                  ylim_exg: tuple = (-100, 100),
                  ylim_imu: tuple = (-1, 1),
                  update_interval_ms: int = 200,
                  max_points: (int, None) = 1000,
                  max_timeout: (int, None) = 15,
-                 find_emg: bool = False,
                  filters: dict = None,
-                 x_coor: np.ndarray[np.float64] = None,
-                 y_coor: np.ndarray[np.float64] =None,
+                 x_coor: np.ndarray = None,
+                 y_coor: np.ndarray = None,
                  width: int = None,
-                 height: int=None,
-                 image: np.ndarray[np.uint8] = None,
-                 # d_interpolate: np.ndarray[np.float64] =None,
-                 filter_data: bool=False):
+                 height: int = None,
+                 image: np.ndarray = None,
+                 filter_data: bool = False,
+                 figure=None,
+                 axes=None):
 
         assert plot_exg or plot_imu
 
         self.data = data
         self.filters = filters
         self.plot_exg = plot_exg
+        ##TODO: Plotting IMU is not working
         self.plot_imu = plot_imu
-        self.plot_ica = plot_ica if plot_ica and plot_exg else False
         self.window_secs = window_secs
-        self.axes = None
-        self.figure = None
+        self.axes = axes  # even indices are for the electrodes, odd indices are for the image
+        self.figure = figure
         self.ylim_exg = ylim_exg
         self.ylim_imu = ylim_imu
         self.xdata = None
         self.ydata = None
         self.lines = []
-        self.pause_time = None
-        self.unpause_time = None
         self.bg = None
         self.last_exg_sample = 0
         self.last_imu_sample = 0
         self.init_time = datetime.now()
         self.update_interval_ms = update_interval_ms
         self.max_points = max_points
-        self.new_max_points = max_points
         self._backend = None
 
-        self.pause=False
+        self.fs = None  # added sampling rate as attribute  (fs)
 
-        self.fs=None #added sampling rate as attribute  (fs)
-
-        # for the buttons on the figure:
-        self.button_start = None
-        self.start_label = 'Start'
-        self.start_time = None
-        self.timer = None
-        self.timer_ax = None
-        self.timer_text = None
-        self.timer_running = False
-        self.button_pause = None
-        self.pause_label = 'Pause'
-
-
-        # define the arrangement order of  the atlas
+        # Define the arrangement order of  the atlas
         self.wanted_order = np.array([12, 13, 14, 15,
                                       11, 10, 9, 8,
                                       4, 5, 6, 7,
                                       3, 2, 1, 0])
 
-        #obtain the image characteristics
+        # Obtain the image characteristics
         self.y_coor = y_coor
         self.x_coor = x_coor
         self.width = width
         self.height = height
-        self.grid_x = None
-        self.grid_y = None
-        self.points = None
         self.image = image
+        self.animation = None
 
-        # self.d_interpolate = d_interpolate  # dummy heatmap for funcanimator initilization
-
-        # added the option to filter the data
+        # Added the option to filter the data
         self.filter_data = filter_data
-
 
         # Confirm initial data retrieval before continuing (or raise Error if timeout)
         while not (self.data.is_connected and self.data.has_data):
@@ -120,7 +90,6 @@ class Electrodes_Raw_Streaming:
                     raise TimeoutError(f"Did not succeed to stream data within {max_timeout} seconds.")
 
         self.setup()
-
 
     def setup(self):
 
@@ -134,46 +103,41 @@ class Electrodes_Raw_Streaming:
         self.points = np.column_stack((self.x_coor, self.y_coor))
 
         # Get data
-        n_exg_samples, n_exg_channels = self.data.exg_data.shape if self.plot_exg else (0, 0)  # TODO: can be None if imu data comes first
+        # TODO: n_exg_samples can be None if imu data comes first
+        n_exg_samples, n_exg_channels = self.data.exg_data.shape if self.plot_exg else (0, 0)
         n_imu_samples, n_imu_channels = self.data.imu_data.shape if self.plot_imu else (0, 0)
 
         # Make timestamp vector
         max_samples = max((n_imu_samples, n_exg_samples))
         last_sec = max_samples / self.fs
-        ts_max = self.window_secs if max_samples <= self.window_secs*self.fs else last_sec
+        ts_max = self.window_secs if max_samples <= self.window_secs * self.fs else last_sec
         ts_min = ts_max - self.window_secs
-        ts = np.arange(ts_min, ts_max, 1/self.fs)
+        ts = np.arange(ts_min, ts_max, 1 / self.fs)
 
         #
         n_channels = n_exg_channels + n_imu_channels
         self.xdata = ts
         self.ydata = np.full((len(ts), n_channels), np.nan)
-        self.max_points = self.max_points if self.window_secs*self.fs < len(self.xdata) else self.window_secs*self.fs
-
-        # For auto-maximization of figure
-        #screensize = ImageGrab.grab().size
-        #px = 1 / plt.rcParams['figure.dpi']  # pixel in inches
-        #screensize_inches = [px*npx for npx in screensize]
+        self.max_points = self.max_points if self.window_secs * self.fs < len(
+            self.xdata) else self.window_secs * self.fs
 
         # set up the grid for the heatmaps with sources
         row_num, col_num = 4, 12  # define the row and col
-        ratio = round(self.height / self.width, 1)
 
         # define layout for the plot
-        fig, axes = plt.subplots()
-        spec = fig.add_gridspec(row_num, col_num)
+        # fig, axes = plt.subplots()
+        spec = self.figure.add_gridspec(row_num, col_num)
 
         axs = []
         for i in range(row_num):
             for j in range(col_num):
                 if (j == 2 or j == 5 or j == 8 or j == 11):
-                    ax = fig.add_subplot(spec[i, j])
+                    ax = self.figure.add_subplot(spec[i, j])
                     axs.append(ax)
                 elif (j == 0 or j == 3 or j == 6 or j == 9):
-                    ax = fig.add_subplot(spec[i, j:j + 2])
+                    ax = self.figure.add_subplot(spec[i, j:j + 2])
                     axs.append(ax)
-        axes.axis('off')
-
+        self.axes.axis('off')
 
         source = 0
         for j in range(len(axs)):
@@ -183,7 +147,6 @@ class Electrodes_Raw_Streaming:
                 circle = Circle((self.x_coor[self.wanted_order[source]], self.y_coor[self.wanted_order[source]]), 15,
                                 edgecolor='red', linewidth=2, fill=False)
                 axs[j].add_patch(circle)
-                # im = axs[j].pcolormesh(self.d_interpolate, cmap='jet', alpha=0.5)
                 self.lines.append(axs[j])
                 axs[j].set_aspect('auto')
                 axs[j].axis('off')
@@ -192,31 +155,29 @@ class Electrodes_Raw_Streaming:
                 axs[j].margins(0)
                 axs[j].set_ylim(self.ylim_exg)
                 self.lines.append(line)
-                axs[j].set_title('source %d' % (self.wanted_order[source] + 1), fontsize=15)
+                axs[j].set_title('Channel %d' % (self.wanted_order[source] + 1), fontsize=15)
             axs[j].xaxis.set_ticklabels([])
             axs[j].xaxis.set_ticks([])
 
             # only show the y-axis for the left-most column
             if (j % 8 == 0):
-                axs[j].tick_params(axis='y', labelsize=10, direction='in', length=4, width=1, bottom=False, labelbottom=False)
+                axs[j].tick_params(axis='y', labelsize=10, direction='in', length=4, width=1, bottom=False,
+                                   labelbottom=False)
             else:
                 axs[j].tick_params(axis='y', left=False, labelleft=False, bottom=False, labelbottom=False)
 
-
         self.axes = axs
-        self.figure = fig
+        # self.figure = fig
 
         manager = plt.get_current_fig_manager()
         manager.window.showMaximized()
 
-
-        fig.subplots_adjust(left=0.05, right=0.975, bottom=0.05, top=0.95, hspace=0.5)
+        self.figure.subplots_adjust(left=0.05, right=0.975, bottom=0.05, top=0.95, hspace=0.5)
 
         self.figure.canvas.mpl_connect('close_event', self.close)
 
-
-        self.bg = [self.figure.canvas.copy_from_bbox(ax.bbox) for ax in np.ravel(self.axes)] if self._backend != 'module://mplopengl.backend_qtgl' else None
-
+        self.bg = [self.figure.canvas.copy_from_bbox(ax.bbox) for ax in
+                   np.ravel(self.axes)] if self._backend != 'module://mplopengl.backend_qtgl' else None
 
     @staticmethod
     def _correct_matrix(matrix, desired_samples):
@@ -235,7 +196,6 @@ class Electrodes_Raw_Streaming:
         data = matrix[n_samples_cropped:]
 
         return data, n_samples_cropped
-
 
     def _update_data(self, data: Data):
 
@@ -301,7 +261,7 @@ class Electrodes_Raw_Streaming:
             last_sec = max_samples / fs
             ts_max = self.window_secs if max_samples <= self.window_secs * fs else last_sec
             ts_min = ts_max - self.window_secs
-            self.xdata = np.arange(ts_min, ts_max, 1/fs)
+            self.xdata = np.arange(ts_min, ts_max, 1 / fs)
 
         self.xdata += n_samples_cropped / fs
         self.ydata = all_data
@@ -341,13 +301,10 @@ class Electrodes_Raw_Streaming:
 
         return filtered_y
 
-
     def update(self, *args, **kwargs):
 
         self._update_data(self.data)
 
-        n_exg_channels = self.data.exg_data.shape[1] if self.plot_exg else 0
-        n_imu_channels = self.data.imu_data.shape[1] if self.plot_imu else 0
         q = int(len(self.xdata) / self.max_points)
         n_pts = int(len(self.xdata) / q)
         x = sig.decimate(self.xdata, q)
@@ -356,16 +313,13 @@ class Electrodes_Raw_Streaming:
         y = y if np.any(np.isnan(y)) else sig.resample(y, n_pts, axis=0)
 
         for i in range(len(self.axes)):
-            if (i%2==0):
+            if (i % 2 == 0):
                 self.axes[i].set_xlim((x[0], x[-1]))
 
         if (self.filter_data == True):
             viz_y = self.filter_raw(y)
         else:
             viz_y = y
-
-
-        # print(np.nanmax(viz_y))
 
         for j in range(len(self.axes)):
             source = int(j / 2)
@@ -380,9 +334,11 @@ class Electrodes_Raw_Streaming:
         time_left = Electrodes_Raw_Streaming._format_time(time_left)
         time_txt_artists = []
         for i in range(len(self.axes)):
-            if (i%2==0):
-                time_txt_artists.append(self.axes[i].text(0.1, 0.05, time_left, transform=self.axes[i].transAxes, ha="left", size=9))
-                time_txt_artists.append(self.axes[i].text(0.85, 0.05, time_right, transform=self.axes[i].transAxes, ha="right", size=9))
+            if (i % 2 == 0):
+                time_txt_artists.append(
+                    self.axes[i].text(0.1, 0.05, time_left, transform=self.axes[i].transAxes, ha="left", size=9))
+                time_txt_artists.append(
+                    self.axes[i].text(0.85, 0.05, time_right, transform=self.axes[i].transAxes, ha="right", size=9))
 
         # Gather artists (necessary if using FuncAnimation)
         lines_artists = self.lines
@@ -397,30 +353,12 @@ class Electrodes_Raw_Streaming:
         return artists
 
     def close(self, _):
-        # self.data.is_connected = False
+        self.data.is_connected = False
         print('Window closed.')
-
-
-    def pause_resume_animation(self, event):
-        if self.pause_label == 'Pause':
-            self.animation.event_source.stop()
-            self.pause_label = 'Resume'
-            self.button_pause.label.set_text(self.pause_label)
-        else:
-            self.animation.event_source.start()
-            self.pause_label = 'Pause'
-            self.button_pause.label.set_text(self.pause_label)
-
 
     def start(self):
         # do  blit = False to change the xaxis length....
         self.animation = FuncAnimation(self.figure, self.update,
-                                  blit=True, interval=self.update_interval_ms, repeat=False, cache_frame_data=False)
-
-
-        # create pause / resume button
-        ax_pause = plt.axes([0.11, 0.01, 0.05, 0.025])
-        self.button_pause = Button(ax_pause, self.pause_label)
-        self.button_pause.on_clicked(self.pause_resume_animation)
-
-        # plt.show()
+                                       blit=True, interval=self.update_interval_ms, repeat=False,
+                                       cache_frame_data=False)
+        plt.show()
