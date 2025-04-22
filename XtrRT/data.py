@@ -118,6 +118,9 @@ class Data(Thread):
             self.bat_file = run_checknet_fix()
             self._init_client(host_name, port)
 
+        # Initialize LSL outlet
+        self.lsl_outlet_streams = {}
+
     def _init_client(self, host_name: str, port: int):
         """
         Initialize socket connection
@@ -437,6 +440,16 @@ class Data(Thread):
                     self.fs_imu = record.fs
                 else:
                     assert self.fs_imu == record.fs
+
+            # Initialize LSL outlet stream if not already done
+            if record.record_type not in self.lsl_outlet_streams:
+                self.lsl_outlet_streams[record.record_type] = StreamOutlet(
+                    StreamInfo(record.record_type + 'Stream', record.record_type, record.data.shape[1], record.fs,
+                               'float32', 'uniqueid12345'))
+
+            # Push samples to the LSL outlet stream
+            for sample in record.data:
+                self.lsl_outlet_streams[record.record_type].push_sample(sample)
 
             # Save time of first received record, regardless of type
             if self.start_time is None:
