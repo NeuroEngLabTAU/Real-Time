@@ -49,6 +49,7 @@ class Electrodes_Raw_Streaming:
         assert plot_exg or plot_imu
 
         self.data = data
+        self.filters = filters
         self.plot_exg = plot_exg
         self.plot_imu = plot_imu
         self.plot_ica = plot_ica if plot_ica and plot_exg else False
@@ -315,28 +316,28 @@ class Electrodes_Raw_Streaming:
 
         return time_str
 
-
     def filter_raw(self, y):
         # normalise cut-off frequencies to sampling frequency
-        high_band = 35 / (self.fs / 2)
-        low_band = 124 / (self.fs / 2)
-
-        # create bandpass filter for EMG
-        b1, a1 = butter(4, [high_band, low_band], btype='bandpass')
+        if 'bandpass' in self.filters:
+            low_band = self.filters['bandpass'][0] / (self.fs / 2)
+            high_band = self.filters['bandpass'][1] / (self.fs / 2)
+            # create bandpass filter for EMG
+            b1, a1 = butter(4, [low_band, high_band], btype='bandpass')
 
         # process EMG signal: filter EMG
         filtered_y = np.zeros(y.shape)
         for i in range(16):
             filtered_y[:, i] = filtfilt(b1, a1, y[:, i])
 
-        # Design a notch filter to remove the 50 Hz power line interference
-        f0 = 50  # Center frequency (Hz)
-        Q = 30  # Quality factor
-        w0 = f0 / (self.fs / 2)  # Normalized frequency
-        b, a = iirnotch(w0, Q)
-
-        # Apply the notch filter to the signal
-        filtered_y = filtfilt(b, a, filtered_y)
+        if 'comb' in self.filters:
+            Q = 30  # Quality factor
+            for freq in self.filters['comb']:
+                # Design a notch filter to remove the specified frequency
+                f0 = freq / (self.fs / 2)
+                w0 = f0 / (self.fs / 2)  # Normalized frequency
+                b, a = iirnotch(w0, Q)
+                # Apply the notch filter to the signal
+                filtered_y = filtfilt(b, a, filtered_y)
 
         return filtered_y
 
