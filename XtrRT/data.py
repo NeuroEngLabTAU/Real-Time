@@ -1,18 +1,21 @@
-
-import os
 import ctypes
+import os
 import socket
-import warnings
-import pyedflib
 import subprocess
-import numpy as np
-from typing import Union
-from threading import Thread
-from itertools import groupby
+import warnings
 from datetime import datetime, timedelta
+from itertools import groupby
+from threading import Thread
+from typing import Union
 
-from .record import parse_byte_arr, \
-    EXPECTED_SAMPLES_PER_RECORD, PHYS_MAX_EXG, PHYS_MAX_ACC, PHYS_MAX_GYR, EXG_BITS, IMU_BITS
+import numpy as np
+import pyedflib
+import pylsl
+from pylsl import StreamInfo, StreamOutlet
+from pylsl import StreamInlet  # Import for LSL
+
+from XtrRT.record import parse_byte_arr, EXPECTED_SAMPLES_PER_RECORD, EXG_BITS, IMU_BITS, PHYS_MAX_EXG, PHYS_MAX_ACC, \
+    PHYS_MAX_GYR
 
 
 class ConnectionTimeoutError(ConnectionRefusedError):
@@ -65,7 +68,6 @@ def run_checknet_fix():
 
 
 class Data(Thread):
-
     VALID_EXTENSIONS = ['.edf']
 
     def __init__(self,
@@ -224,7 +226,6 @@ class Data(Thread):
         fp, ext = os.path.splitext(self.save_as)
         success = False
         if ext.lower() == '.edf':
-
             success = self._write_edf()
             print(f"Data saved to {self.save_as}")
 
@@ -245,8 +246,10 @@ class Data(Thread):
         startdate = self.start_time
         annotations = self.annotations
 
-        assert startdate is None or isinstance(startdate, datetime), 'must be datetime or None, is {}: {}'.format(type(startdate), startdate)
-        assert birthdate == '' or isinstance(birthdate, (datetime, str)), 'must be datetime or empty, is {}'.format(type(birthdate))
+        assert startdate is None or isinstance(startdate, datetime), 'must be datetime or None, is {}: {}'.format(
+            type(startdate), startdate)
+        assert birthdate == '' or isinstance(birthdate, (datetime, str)), 'must be datetime or empty, is {}'.format(
+            type(birthdate))
         if startdate is None:
             now = datetime.now()
             startdate = datetime(now.year, now.month, now.day, now.hour, now.minute, now.second)
@@ -277,13 +280,13 @@ class Data(Thread):
                 channels.extend([ch for ch in data.T])
 
                 labels = [f'Channel {nch}' for nch in range(n_channels)] if dataset == "EXG" else \
-                         ["Acc X", "Acc Y", "Acc Z", "Gyro X", "Gyro Y", "Gyro Z"]
+                    ["Acc X", "Acc Y", "Acc Z", "Gyro X", "Gyro Y", "Gyro Z"]
 
                 # If there are n_bits of data, then signed data can range from -2^n_bits/2 to 2^n_bits/2-1
                 # 2^n_bits/2 = 2^(n_bits-1)
                 n_bits = EXG_BITS if dataset == 'EXG' else IMU_BITS if dataset == 'IMU' else 0
-                digital_max = int(2 ** (n_bits-1) - 1)
-                digital_min = int(- 2 ** (n_bits-1))
+                digital_max = int(2 ** (n_bits - 1) - 1)
+                digital_min = int(- 2 ** (n_bits - 1))
 
                 for nch in range(n_channels):
 
@@ -342,9 +345,9 @@ class Data(Thread):
                 warnings.filterwarnings("ignore", category=UserWarning)
                 edf.setSignalHeaders(signal_headers)
                 edf.setHeader(header)
-                edf.writeSamples(signals, digital=False)  # digital = False if physical values; True if int
-                for time, dur, txt in self.annotations:
-                    edf.writeAnnotation(time, dur, txt)
+                edf.writeSamples(signals, digital=False)  # if physical values; True if int
+                for onset, dur, txt in self.annotations:
+                    edf.writeAnnotation(onset, dur, txt)
 
         SUCCESS = os.path.isfile(filepath) and os.path.getsize(filepath) > min([len(sig) for sig in signals])
         return SUCCESS
@@ -405,7 +408,6 @@ class Data(Thread):
             is_valid = self._validate_record(record)
 
             if record.record_type == "EXG":
-
                 # No EXG data yet
                 if self.exg_data is None:
                     self.exg_data = record.data
@@ -491,8 +493,8 @@ class Data(Thread):
         # Incoming data info
         n_samples = record.data.shape[0]
         record_idx = record.packet_idx
-        while record_idx + 2**15 < current_packet[0]:
-            record_idx += 2**16
+        while record_idx + 2 ** 15 < current_packet[0]:
+            record_idx += 2 ** 16
 
         # Usually, numerous packets are already sent from the DAU by the time this app connects to the streamer,
         # so we can ignore an initial gap in indices:
@@ -500,12 +502,14 @@ class Data(Thread):
             self._update_current_packet_info(record.record_type, record_idx, n_samples)
 
         # Receiving a (full or partial) packet with index 1 greater than the previous packet, which is complete:
-        elif record_idx == current_packet[0] + 1 and current_packet[1] == EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type]:
+        elif record_idx == current_packet[0] + 1 and current_packet[1] == EXPECTED_SAMPLES_PER_RECORD[fs][
+            record.record_type]:
             self._update_current_packet_info(record.record_type, record_idx, n_samples)
 
         # Receiving a partial packet with same index as prior packet received, whose sum of samples is at most
         # the number expected in a full packet:
-        elif record_idx == current_packet[0] and n_samples + current_packet[1] <= EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type]:
+        elif record_idx == current_packet[0] and n_samples + current_packet[1] <= EXPECTED_SAMPLES_PER_RECORD[fs][
+            record.record_type]:
             self._update_current_packet_info(record.record_type, record_idx, n_samples + current_packet[1])
 
         # After max uint16 (=65535), index restarts at 0, so we allow the following:
@@ -513,7 +517,8 @@ class Data(Thread):
             self._update_current_packet_info(record.record_type, record_idx, n_samples)
 
         # Data collection began with a partial packet, so it's OK that a new packet follows:
-        elif record_idx == current_packet[0] + 1 and existing_samples < EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type]:
+        elif record_idx == current_packet[0] + 1 and existing_samples < EXPECTED_SAMPLES_PER_RECORD[fs][
+            record.record_type]:
             self._update_current_packet_info(record.record_type, record_idx, n_samples)
 
         # Something is awry.
@@ -524,21 +529,25 @@ class Data(Thread):
 
             # Attempt to retroactively insert packet that was skipped (never actually happens)
             if current_packet[0] > record_idx:
-                warnings.warn(f"Wrongly inserted packet index {record_idx} ({n_samples} sample{s_rec} after packet index {current_packet[0]} ({current_packet[1]} sample{s_cur}).")
+                warnings.warn(
+                    f"Wrongly inserted packet index {record_idx} ({n_samples} sample{s_rec} after packet index {current_packet[0]} ({current_packet[1]} sample{s_cur}).")
                 self._update_current_packet_info(record.record_type, record_idx, n_samples)
                 is_valid = False
 
             # Attempting to insert packet after missing packets
             elif current_packet[0] <= record_idx:
-                missed_samples = record_idx * EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type] - (current_packet[0] * EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type] + current_packet[1])
+                missed_samples = record_idx * EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type] - (
+                        current_packet[0] * EXPECTED_SAMPLES_PER_RECORD[fs][record.record_type] + current_packet[1])
                 s_miss = 's' if missed_samples > 1 else ''
-                warnings.warn(f"Missing {missed_samples} sample{s_miss} between last packet index {current_packet[0]} ({current_packet[1]} sample{s_cur}) and current packet index {record_idx} ({n_samples} sample{s_rec}).")
+                warnings.warn(
+                    f"Missing {missed_samples} sample{s_miss} between last packet index {current_packet[0]} ({current_packet[1]} sample{s_cur}) and current packet index {record_idx} ({n_samples} sample{s_rec}).")
                 self._update_current_packet_info(record.record_type, record_idx, n_samples)
                 is_valid = False
 
             # Shouldn't happen!
             else:
-                warnings.warn(f"Unexpected error attempting to insert packet index {record.packet_idx} ({n_samples} samples) after packet index {current_packet[0]} ({current_packet[1]} samples).")
+                warnings.warn(
+                    f"Unexpected error attempting to insert packet index {record.packet_idx} ({n_samples} samples) after packet index {current_packet[0]} ({current_packet[1]} samples).")
                 is_valid = False
 
         return is_valid
@@ -549,15 +558,15 @@ class Data(Thread):
 
         if time is None:
             secs_since_start = 0 if self.exg_data is None and self.imu_data is None \
-                                 else self.imu_data.shape[0]/self.fs_imu if self.exg_data is None \
-                                 else self.exg_data.shape[0]/self.fs_exg
+                else self.imu_data.shape[0] / self.fs_imu if self.exg_data is None \
+                else self.exg_data.shape[0] / self.fs_exg
             time = secs_since_start
         elif isinstance(time, (int, float)):
             assert time > 0, "Attempting to insert annotation before data collection began."
         elif isinstance(time, datetime):
             time = self.start_time if time < self.start_time else time
             dif = time - self.start_time
-            time = dif.seconds + dif.microseconds/1e6
+            time = dif.seconds + dif.microseconds / 1e6
         else:
             raise ValueError
 
@@ -567,7 +576,7 @@ class Data(Thread):
             # duration = timedelta(seconds=secs, milliseconds=ms)
             assert duration >= 0
         elif isinstance(duration, timedelta):
-            duration = duration.seconds + duration.microseconds/1e6
+            duration = duration.seconds + duration.microseconds / 1e6
         else:
             raise ValueError
 
