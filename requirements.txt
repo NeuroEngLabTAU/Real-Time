@@ -1,6 +1,6 @@
 matplotlib
-numpy<2
-opencv-python
+numpy
+opencv-python # cv2
 Pillow
 PyQt5
 pyedflib
@@ -9,3 +9,11 @@ scipy
 python-picard
 keyboard
 pandas
+
+pylsl
+python-picard # picard
+
+### --- Common expirements script dependencies (not necessary for the XtrRT package) ---
+PyAutoGUI
+psychopy
+tabulate
