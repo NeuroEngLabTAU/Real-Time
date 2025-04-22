@@ -239,7 +239,7 @@ class Data(Thread):
                          patientcode: str = '',
                          equipment: str = '',
                          admincode: str = '',
-                         gender: str = '',
+                         sex: str = '',
                          birthdate: Union[datetime, str] = ''):
 
         startdate = self.start_time
@@ -303,14 +303,13 @@ class Data(Thread):
                     physical_min = -physical_max
 
                     header = {
-                        'label':  label,                # channel label (string, <= 16 characters, must be unique)
-                        'dimension':  units,            # physical dimension (e.g., mV) (string, <= 8 characters)
-                        'sample_rate':  fs,             # sample frequency in hertz (int). Deprecated: use 'sample_frequency' instead.
-                        'sample_frequency':  fs,        # number of samples per record (int)
-                        'physical_max':  physical_max,  # maximum physical value (float)
-                        'physical_min':  physical_min,  # minimum physical value (float)
-                        'digital_max':  digital_max,    # maximum digital value (int, -2**n_bits <= x < 2**n_bits)
-                        'digital_min':  digital_min,    # minimum digital value (int, -2**n_bits <= x < 2**n_bits)
+                        'label': label,  # channel label (string, <= 16 characters, must be unique)
+                        'dimension': units,  # physical dimension (e.g., mV) (string, <= 8 characters)
+                        'sample_frequency': fs,  # number of samples per record (int, Hz)
+                        'physical_max': physical_max,  # maximum physical value (float)
+                        'physical_min': physical_min,  # minimum physical value (float)
+                        'digital_max': digital_max,  # maximum digital value (int, -2**n_bits <= x < 2**n_bits)
+                        'digital_min': digital_min,  # minimum digital value (int, -2**n_bits <= x < 2**n_bits)
                     }
                     headers.append(header)
 
