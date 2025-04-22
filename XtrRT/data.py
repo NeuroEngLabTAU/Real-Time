@@ -18,7 +18,9 @@ from .record import parse_byte_arr, \
 class ConnectionTimeoutError(ConnectionRefusedError):
 
     def __init__(self,
-                 message="\nMake sure \"Bluetooth Low Energy C# sample\" is running and connected. Then do this and run again:"
+                 message="\nMake sure \"Bluetooth Low Energy C# sample\" (BLE) is running and connected."
+                         "\nThen run the script again."
+                         "\nIf it fails although BLE is running, try the following steps manually:"
                          "\n  1. Copy: CheckNetIsolation.exe LoopbackExempt -is -p=S-1-15-2-2022722280-4131399851-3337013219-4054732753-2439233258-3605005605-669734301"
                          "\n  2. Open PowerShell as Administrator"
                          "\n  3. Right click inside the PowerShell window to paste; hit Enter. (Keep this window open!)"
@@ -30,6 +32,36 @@ class ConnectionTimeoutError(ConnectionRefusedError):
 
     def __repr__(self):
         return str(type(self))
+
+
+def run_checknet_fix():
+    bat_file = "run_checknet_command.bat"
+    vbs_file = "run_checknet_as_admin.vbs"
+
+    sid_command = r'CheckNetIsolation.exe LoopbackExempt -is -p=S-1-15-2-2022722280-4131399851-3337013219-4054732753-2439233258-3605005605-669734301'
+
+    try:
+        with open(bat_file, "w") as f:
+            f.write(f"@echo off\n{sid_command}\n")
+
+        with open(vbs_file, "w") as f:
+            f.write(f'''
+                    Set UAC = CreateObject("Shell.Application")
+                    UAC.ShellExecute "cmd.exe", "/c {os.path.abspath(bat_file)}", "", "runas", 1
+                    ''')
+
+        print("Running CheckNetIsolation fix with admin privileges...")
+        os.system(f'cscript //nologo {vbs_file}')
+
+    finally:
+        for file in [vbs_file]:
+            try:
+                if os.path.exists(file):
+                    os.remove(file)
+            except Exception as e:
+                print(f"Failed to delete {file}: {e}")
+
+    return bat_file
 
 
 class Data(Thread):
@@ -78,7 +110,11 @@ class Data(Thread):
         self._current_packet_imu = (0, 0)
 
         # Initialize client
-        self._init_client(host_name, port)
+        try:
+            self._init_client(host_name, port)
+        except ConnectionTimeoutError:
+            self.bat_file = run_checknet_fix()
+            self._init_client(host_name, port)
 
     def _init_client(self, host_name: str, port: int):
         """
@@ -517,3 +553,5 @@ class Data(Thread):
 
     def stop(self):
         self.is_connected = False
+        if hasattr(self, 'bat_file') and os.path.exists(self.bat_file):
+            os.remove(self.bat_file)
