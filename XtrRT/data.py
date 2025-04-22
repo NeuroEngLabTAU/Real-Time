@@ -73,7 +73,8 @@ class Data(Thread):
                  port: int,
                  timeout_secs: float = None,
                  verbose: bool = False,
-                 save_as: str = None):
+                 save_as: str = None,
+                 lsl_inlet: StreamInlet = None):
 
         # Make sure `save_as` file path is valid
         if isinstance(save_as, str):
@@ -93,6 +94,7 @@ class Data(Thread):
         Thread.__init__(self)
 
         # Initialize properties
+        self.lsl_inlet = lsl_inlet
         self.has_data = False
         self.exg_data = None
         self.imu_data = None
@@ -196,6 +198,14 @@ class Data(Thread):
 
             # Receive incoming record(s)
             records = self._parse_incoming_records()
+            if self.lsl_inlet is not None:
+                sample, timestamp = self.lsl_inlet.pull_sample(timeout=0)
+                if sample:
+                    # Sample contains the trigger string
+                    print(f"Received trigger: {sample[0]} at timestamp {timestamp}")
+                    trigger_str = f"Trigger: {sample[0]}"
+                    trigger_time = timestamp - pylsl.local_clock() + (datetime.now() - self.start_time).total_seconds()
+                    self.add_annotation(trigger_str, time=trigger_time)
 
             # Add newly received data to main data matrix
             self._add_to_data(records)
