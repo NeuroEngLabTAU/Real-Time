@@ -165,15 +165,19 @@ def parse_byte_arr(byte_arr):
                 samples[channel_index].extend(sample_buffer)
                 pointer += N_BYTES_PER_SAMPLE
 
-        record = Record(record_type=record_type,
-                        data=np.array(samples).T,
-                        unix_time_secs=unix_time_secs,
-                        unix_time_ms=unix_time_ms,
-                        channel_mapping=channel_mapping,
-                        fs=sampling_rate,
-                        downsample=downsample,
-                        packet_idx=packet_idx,
-                        record_len=record_len)
-        records.append(record)
+        # There is delay problem with IMU data, so we don't use it for now
+        # Remove this check if you want to use IMU data
+        # In addition, in data.py, _add_to_data() function - edit the self.has_data condition to include IMU data
+        if record_type == "EXG":
+            record = Record(record_type=record_type,
+                            data=np.array(samples).T,
+                            unix_time_secs=unix_time_secs,
+                            unix_time_ms=unix_time_ms,
+                            channel_mapping=channel_mapping,
+                            fs=sampling_rate,
+                            downsample=downsample,
+                            packet_idx=packet_idx,
+                            record_len=record_len)
+            records.append(record)
 
     return records

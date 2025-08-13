@@ -457,7 +457,7 @@ class Data(Thread):
                 self.start_time = datetime.fromtimestamp(records[0].unix_time_secs) + \
                                   timedelta(milliseconds=records[0].unix_time_ms)
 
-            if not self.has_data and (self.exg_data is not None and self.imu_data is not None):
+            if not self.has_data and (self.exg_data is not None):# and self.imu_data is not None):
                 self.has_data = True
                 print("Streaming EXG and IMU data...")
 
