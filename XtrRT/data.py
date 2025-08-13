@@ -3,6 +3,7 @@ import os
 import socket
 import subprocess
 import warnings
+import time
 from datetime import datetime, timedelta
 from itertools import groupby
 from threading import Thread
@@ -37,34 +38,38 @@ class ConnectionTimeoutError(ConnectionRefusedError):
         return str(type(self))
 
 
-def run_checknet_fix():
+def run_checknet():
     bat_file = "run_checknet_command.bat"
-    vbs_file = "run_checknet_as_admin.vbs"
 
     sid_command = r'CheckNetIsolation.exe LoopbackExempt -is -p=S-1-15-2-2022722280-4131399851-3337013219-4054732753-2439233258-3605005605-669734301'
 
     try:
+        # Create batch file
         with open(bat_file, "w") as f:
-            f.write(f"@echo off\n{sid_command}\n")
-
-        with open(vbs_file, "w") as f:
-            f.write(f'''
-                    Set UAC = CreateObject("Shell.Application")
-                    UAC.ShellExecute "cmd.exe", "/c {os.path.abspath(bat_file)}", "", "runas", 1
-                    ''')
+            f.write(f"@echo off\n{sid_command}\npause\n")  # Added pause to see output
 
         print("Running CheckNetIsolation fix with admin privileges...")
-        os.system(f'cscript //nologo {vbs_file}')
+
+        ps_command = f'Start-Process -FilePath "{os.path.abspath(bat_file)}" -Verb RunAs'
+        result = subprocess.run(['powershell', '-Command', ps_command],
+                                capture_output=True, text=True, shell=True)
+
+        if result.returncode == 0:
+            print("Command executed successfully")
+        else:
+            print(f"Error: {result.stderr}")
+
+    except Exception as e:
+        print(f"Error running command: {e}")
 
     finally:
-        for file in [vbs_file]:
-            try:
-                if os.path.exists(file):
-                    os.remove(file)
-            except Exception as e:
-                print(f"Failed to delete {file}: {e}")
-
-    return bat_file
+        # Clean up
+        try:
+            if os.path.exists(bat_file):
+                time.sleep(0.1)
+                os.remove(bat_file)
+        except Exception as e:
+            print(f"Failed to delete {bat_file}: {e}")
 
 
 class Data(Thread):
@@ -117,7 +122,7 @@ class Data(Thread):
         try:
             self._init_client(host_name, port)
         except ConnectionTimeoutError:
-            self.bat_file = run_checknet_fix()
+            self.bat_file = run_checknet()
             self._init_client(host_name, port)
 
         # Initialize LSL outlet
