@@ -1,0 +1,12 @@
+*egg*
+*/*/__pycache__/*
+*/*_pycache_*
+.mypy_cache/**/*
+.coverage
+htmlcov/*
+.pytest_cache/**
+build/**
+dist/**
+.test/**
+.vscode/**
+.coverage.*

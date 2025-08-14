@@ -1,0 +1,6 @@
+[run]
+omit =     
+    stg/example/*   
+    stg/install.py
+    stg/_wrapper/mock.py
+    
