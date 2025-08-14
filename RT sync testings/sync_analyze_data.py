@@ -75,7 +75,7 @@ def detect_sin_onsets(data, fs,
                 filtered_onsets.append(onset)
         onset_indices = np.array(filtered_onsets)
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
     ax = axes[0]
     ax.plot(np.arange(len(data)) / fs, data, label='Raw Signal', alpha=0.5, linewidth=0.5)
     ax.set_ylabel('Raw Signal Amplitude')
@@ -90,7 +90,6 @@ def detect_sin_onsets(data, fs,
                     label='Detected Onset' if onset == onset_indices[0] else "")
 
     axes[1].plot(onset_indices[:-1] / fs, np.diff(onset_indices) / fs, marker='o', linestyle='-', color='purple')
-    plt.show()
 
     return onset_indices / fs, power_smooth, threshold, data
 
@@ -184,30 +183,30 @@ def analyze_stimulation_delays(file_path, channel_index, threshold_factor=3):
     print(f"  Triggers found: {len(trigger_annot_times)}")
     print(f"  Onsets detected: {len(onset_times)}")
 
-    fig_intervals, axes = plt.subplots(3, 1, figsize=(12, 6), sharex=True)
-    axes[0].plot(trigger_annot_times[:-1], np.diff(onset_times), marker='o', linestyle='-', color='purple')
-    axes[0].set_ylabel('Onset interval (s)')
+    onset_intervals = np.diff(onset_times)
+    trigger_intervals = np.diff(trigger_annot_times)
 
-    axes[1].plot(trigger_annot_times[:-1], np.diff(trigger_annot_times), marker='o', linestyle='-', color='orange')
-    axes[1].set_ylabel('Trigger interval (s)')
+    fig_intervals, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    axes[0].plot(trigger_annot_times[:-1], onset_intervals, marker='o', linestyle='-', color='purple', label = 'Onset Intervals')
+    axes[0].plot(trigger_annot_times[:-1], trigger_intervals, marker='o', linestyle='-', color='orange', label='Trigger Intervals')
+    axes[0].set_ylabel('Interval (s)')
+    axes[0].legend()
 
-    axes[2].plot(onset_times, onset_times - trigger_annot_times, marker='o', linestyle='-', color='green',
+    axes[1].plot(trigger_annot_times, onset_times - trigger_annot_times, marker='o', linestyle='-', color='green',
                  label='Onset - Trigger')
-    # axes[2].plot(trigger_annot_times, onset_times, marker='o', linestyle='-', color='green',
-    #              label='Onset Times vs Trigger Times')
-    # axes[2].plot(trigger_annot_times, trigger_annot_times,
-    #              marker='x', linestyle='-', color='blue', alpha=0.5, label='Trigger Times = Onset Times')
-    # axes[2].plot(onset_times, onset_times, marker='x', linestyle='-', color='red', alpha=0.5, label='Onset Times')
-    # axes[2].plot(onset_times, trigger_annot_times, marker='x', linestyle='-', color='blue', alpha=0.5,
-    #              label='Trigger Times')
-    # legend = axes[2].legend()
-    axes[2].set_ylabel('Onset (s)')
-    axes[2].set_xlabel('Trigger (s)')
+    axes[1].set_xlabel('Trigger (s)')
+    axes[1].set_ylabel('Onset - Trigger (s)')
+    # axes[1].plot(trigger_annot_times, onset_times, marker='o', linestyle='-', color='green',
+    #              label='Onset Times')
+    # axes[1].plot(trigger_annot_times, trigger_annot_times,
+    #              marker='x', linestyle='-', color='blue', alpha=0.5, label='Trigger Times ')
+    # axes[1].set_ylabel('(s)')
+    # axes[1].legend()
 
     # Calculate delays
     matched_triggers_annot = trigger_annot_times
     matched_onsets = onset_times
-    delays = trigger_annot_times - onset_times
+    delays = onset_times - trigger_annot_times
 
     print(f"  Matched pairs: {len(delays)}")
     print()
@@ -215,6 +214,10 @@ def analyze_stimulation_delays(file_path, channel_index, threshold_factor=3):
     # Statistics
     if len(delays) > 0:
         delays_ms = delays * 1000
+        print(f"Mean intervals [sec]: Onset {np.mean(onset_intervals):.2f} vs Trigger {np.mean(trigger_intervals):.2f}")
+        print(f"Difference between the intervals: {np.mean(onset_intervals - trigger_intervals):.2f} seconds")
+        print(f'Expected delay after 30 pulse/min of stimulation: {np.mean(onset_intervals - trigger_intervals) * 30:.2f} seconds')
+        print(f'--------------------')
         print(f"Delay Statistics:")
         print(f"  Mean: {np.mean(delays_ms):.2f} ± {np.std(delays_ms):.2f} ms")
         print(f"  Median: {np.median(delays_ms):.2f} ms")
@@ -261,7 +264,7 @@ if __name__ == "__main__":
 
     # Save results
     if results_df is not None:
-        output_file = "stimulation_delay_analysis.csv"
+        output_file = "results/stimulation_delay_analysis.csv"
         results_df.to_csv(output_file, index=False)
         print(f"Results saved to: {output_file}")
 
